@@ -48,7 +48,7 @@ The webport is intended for modern browsers on both desktop and mobile devices.
 | Brave                         | Supported        |
 | Other Chromium-based browsers | Likely supported |
 
-The game can also be played on mobile phones. Performance, controls, and compatibility may vary depending on your device and browser.
+The game can also be played on mobile phones and tablets. Tap to jump, drag to scroll lists and move sliders, and use the pause button in the top-right corner. When you tap a text field (like level search), a text bar appears at the top so you can type with your phone's keyboard. Platformer levels show left and right buttons in the bottom-left corner. Performance and compatibility may vary depending on your device and browser.
 
 ## Game Information
 
@@ -76,6 +76,7 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 | Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
 | Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
 | FPS & Visuals | Unlock or cap the frame rate, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
+| Mobile Controls | On phones and tablets: a text bar that opens the on-screen keyboard when you tap a text field in the game, left/right buttons in platformer levels, and landscape lock in fullscreen. |
 
 Cheats like noclip and speedhack turn on safe mode automatically, so they can't save progress. You can change this in the Eclipse Menu settings.
 

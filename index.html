@@ -609,6 +609,92 @@
       display: none;
     }
 
+    #gd-textbar {
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      z-index: 1000002;
+      display: flex;
+      gap: 6px;
+      width: min(480px, calc(100% - 16px));
+      padding: 6px;
+      transform: translateX(-50%);
+      border: 1px solid #ffffff40;
+      border-radius: 8px;
+      background: #111e;
+      box-sizing: border-box;
+    }
+
+    #gd-textbar[hidden],
+    #gd-touch-controls[hidden],
+    #gd-rotate-hint[hidden] {
+      display: none;
+    }
+
+    #gd-textbar input {
+      flex: 1;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid #ffffff40;
+      border-radius: 4px;
+      background: #ffffff14;
+      color: #fff;
+      font: 16px sans-serif;
+    }
+
+    #gd-textbar button,
+    #gd-rotate-hint button {
+      padding: 6px 12px;
+      border: 1px solid #ffffff40;
+      border-radius: 4px;
+      background: #ffffff24;
+      color: #fff;
+      font: 14px sans-serif;
+    }
+
+    #gd-touch-controls {
+      position: absolute;
+      bottom: 3cqw;
+      left: 3cqw;
+      z-index: 10;
+      display: flex;
+      gap: calc(2cqw * var(--gd-touch-scale, 1));
+    }
+
+    #gd-touch-controls button {
+      width: calc(9cqw * var(--gd-touch-scale, 1));
+      height: calc(9cqw * var(--gd-touch-scale, 1));
+      border: 2px solid #fff;
+      border-radius: 50%;
+      background: #0008;
+      color: #fff;
+      font-size: calc(3.5cqw * var(--gd-touch-scale, 1));
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #gd-touch-controls button[data-down] {
+      background: #fff6;
+    }
+
+    #gd-rotate-hint {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      z-index: 1000000;
+      max-width: calc(100% - 24px);
+      padding: 10px 12px;
+      transform: translateX(-50%);
+      border: 1px solid #ffffff40;
+      border-radius: 6px;
+      background: #111e;
+      color: #fff;
+      font: 14px/1.4 sans-serif;
+      box-sizing: border-box;
+    }
+
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
@@ -1391,6 +1477,8 @@ self.onmessage = async ({ data: e }) => {
           "LevelTools::getAudioFileName": 0x728470,
           "LevelTools::getAudioTitle": 0x7278f0,
           "GJBaseGameLayer::shakeCamera": 0x63bc50,
+          "cocos2d::CCTextFieldTTF::attachWithIME": 0x100b5140,
+          "cocos2d::CCTextFieldTTF::detachWithIME": 0x100b5540,
         };
       let instance = null,
         table = null,
@@ -3006,6 +3094,212 @@ self.onmessage = async ({ data: e }) => {
           counter.textContent = frameTimes.length + " FPS";
         }
       }, 250);
+    })();
+    // Mobile Controls: what the Windows game lacks on phones and tablets.
+    // A text bar that brings up the on-screen keyboard when a game text
+    // field is selected, left/right buttons in platformer levels, and
+    // landscape lock in fullscreen.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        // GJBaseGameLayer::m_isPlatformer (Windows 2.2081 layout).
+        PLATFORMER_OFFSET = 0x309e,
+        isTouchDevice = () => window.matchMedia("(any-pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+      let textBar = null,
+        textInput = null,
+        typed = "",
+        touchControls = null,
+        platformerSeenAt = 0,
+        rotateHint = null;
+      const hintDismissed = {
+        get() {
+          try {
+            return !!sessionStorage.getItem("gd-rotate-dismissed");
+          } catch (storageError) {
+            return false;
+          }
+        },
+        set() {
+          try {
+            sessionStorage.setItem("gd-rotate-dismissed", "1");
+          } catch (storageError) {}
+        },
+      };
+
+      const mod = loader.registerMod({
+        id: "web.mobile",
+        name: "Mobile Controls",
+        developer: "webport",
+        version: "1.0",
+        description: "Typing with the on-screen keyboard, left/right buttons for platformer levels and landscape mode on phones and tablets.",
+        enabledByDefault: true,
+        settings: [
+          { id: "keyboard", type: "choice", name: "Text bar for typing", default: "touch", options: [
+            { value: "touch", name: "On touch screens" },
+            { value: "always", name: "Always" },
+            { value: "off", name: "Off" },
+          ] },
+          { id: "platformerButtons", type: "choice", name: "Platformer buttons", default: "touch", options: [
+            { value: "touch", name: "On touch screens" },
+            { value: "always", name: "Always" },
+            { value: "off", name: "Off" },
+          ] },
+          { id: "buttonSize", type: "float", name: "Button size", min: 0.6, max: 1.6, step: 0.05, default: 1 },
+          { id: "buttonOpacity", type: "float", name: "Button opacity", min: 0.15, max: 1, step: 0.05, default: 0.45 },
+          { id: "landscape", type: "bool", name: "Landscape lock and hint", description: "Lock to landscape in fullscreen and suggest turning the phone.", default: true },
+        ],
+        setup(mod) {
+          mod.hook("cocos2d::CCTextFieldTTF::attachWithIME", (call) => {
+            call.callOriginal();
+            if (call.result() & 255) setTimeout(openTextBar, 0);
+          });
+          mod.hook("cocos2d::CCTextFieldTTF::detachWithIME", (call) => {
+            call.callOriginal();
+            setTimeout(closeTextBar, 0);
+          });
+          mod.hook("GJBaseGameLayer::update", (call) => {
+            if (mem.u8(call.arg(0) + PLATFORMER_OFFSET)) platformerSeenAt = Date.now();
+          });
+        },
+      });
+      // The game applies typed characters before key presses read in the same
+      // frame, so backspaces go out first and the new text a moment later.
+      const typeQueue = [];
+      let typing = false;
+      function sendText(text) {
+        typeQueue.push(text);
+        if (!typing) pumpText();
+      }
+      function pumpText() {
+        const text = typeQueue.shift();
+        if (text === undefined) {
+          typing = false;
+          return;
+        }
+        typing = true;
+        window.__gdTypeText(text);
+        setTimeout(pumpText, /[\b\r]/.test(text) ? 60 : 0);
+      }
+      const wanted = (setting) => mod.enabled && (setting === "always" || (setting === "touch" && isTouchDevice()));
+
+      // ---------------------------------------------------------- text bar
+      function buildTextBar() {
+        textBar = document.createElement("div");
+        textBar.id = "gd-textbar";
+        textBar.hidden = true;
+        textInput = document.createElement("input");
+        Object.assign(textInput, { type: "text", autocomplete: "off", spellcheck: false, placeholder: "Type here" });
+        textInput.setAttribute("autocapitalize", "off");
+        textInput.setAttribute("enterkeyhint", "done");
+        textInput.setAttribute("aria-label", "Text for the game");
+        const done = document.createElement("button");
+        done.type = "button";
+        done.textContent = "Done";
+        done.addEventListener("click", () => {
+          sendText("\r");
+          closeTextBar();
+        });
+        textInput.addEventListener("input", () => {
+          // Send what changed: backspaces for removed text, then new characters.
+          const next = textInput.value;
+          let common = 0;
+          while (common < typed.length && common < next.length && typed[common] === next[common]) common++;
+          if (typed.length > common) sendText("\b".repeat(typed.length - common));
+          if (next.length > common) sendText(next.slice(common));
+          typed = next;
+        });
+        textInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            sendText("\r");
+            closeTextBar();
+          }
+        });
+        textBar.append(textInput, done);
+        document.getElementById("gd-stage").appendChild(textBar);
+      }
+      function openTextBar() {
+        if (!wanted(mod.settings.keyboard)) return;
+        if (!textBar) buildTextBar();
+        typed = "";
+        textInput.value = "";
+        textBar.hidden = false;
+        try {
+          textInput.focus({ preventScroll: true });
+        } catch (focusError) {}
+      }
+      function closeTextBar() {
+        if (!textBar || textBar.hidden) return;
+        textBar.hidden = true;
+        textInput.blur();
+        try {
+          document.getElementById("canvas").focus({ preventScroll: true });
+        } catch (focusError) {}
+      }
+
+      // -------------------------------------------------- platformer buttons
+      function buildTouchControls() {
+        touchControls = document.createElement("div");
+        touchControls.id = "gd-touch-controls";
+        touchControls.hidden = true;
+        for (const [code, label, symbol] of [["KeyA", "Move left", "◀"], ["KeyD", "Move right", "▶"]]) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = symbol;
+          button.setAttribute("aria-label", label);
+          const release = () => {
+            if (button.dataset.down) {
+              delete button.dataset.down;
+              window.__gdSetKey(code, false);
+            }
+          };
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            button.setPointerCapture(event.pointerId);
+            button.dataset.down = "1";
+            window.__gdSetKey(code, true);
+          });
+          for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(type, release);
+          button.addEventListener("contextmenu", (event) => event.preventDefault());
+          touchControls.appendChild(button);
+        }
+        document.getElementById("gd-frame").appendChild(touchControls);
+      }
+      setInterval(() => {
+        const settings = mod.settings,
+          show = wanted(settings.platformerButtons) && window.__gdInputReady && Date.now() - platformerSeenAt < 500;
+        if (show && !touchControls) buildTouchControls();
+        if (touchControls) {
+          if (!show) touchControls.querySelectorAll("button").forEach((b) => b.dispatchEvent(new Event("pointercancel")));
+          touchControls.hidden = !show;
+          touchControls.style.setProperty("--gd-touch-scale", settings.buttonSize);
+          touchControls.style.opacity = settings.buttonOpacity;
+        }
+        // Landscape hint on phones held upright.
+        const portrait = mod.enabled && settings.landscape && isTouchDevice() && window.innerHeight > window.innerWidth;
+        if (portrait && !rotateHint && !hintDismissed.get()) {
+          rotateHint = document.createElement("div");
+          rotateHint.id = "gd-rotate-hint";
+          rotateHint.setAttribute("role", "status");
+          rotateHint.textContent = "Turn your device sideways for a bigger picture. ";
+          const close = document.createElement("button");
+          close.type = "button";
+          close.textContent = "OK";
+          close.addEventListener("click", () => {
+            hintDismissed.set();
+            rotateHint.hidden = true;
+          });
+          rotateHint.appendChild(close);
+          document.getElementById("gd-stage").appendChild(rotateHint);
+        }
+        if (rotateHint) rotateHint.hidden = !portrait || hintDismissed.get();
+      }, 200);
+
+      document.addEventListener("fullscreenchange", () => {
+        if (document.fullscreenElement && mod.enabled && mod.settings.landscape && isTouchDevice() && screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock("landscape").catch(() => {});
+        }
+      });
     })();
     </script>
 
@@ -4779,9 +5073,35 @@ self.onmessage = async ({ data: e }) => {
           sendGameKey(code, false);
         }, 80);
       };
+      // Holds or releases a game key (on-screen touch buttons).
+      window.__gdSetKey = function (code, isDown) {
+        if (isInputReady()) {
+          sendGameKey(code, isDown);
+        }
+      };
+      // Types text into the focused game text field (on-screen keyboard).
+      window.__gdTypeText = function (text) {
+        if (!isInputReady()) {
+          return;
+        }
+        for (const ch of text) {
+          const charCode = ch.charCodeAt(0);
+          if (charCode === 8 || charCode === 13) {
+            const code = charCode === 8 ? "Backspace" : "Enter";
+            pushInput(258, charCode, 1 | (CODE_TO_SCANCODE[code] << 16));
+            window.__gdPressKey(code);
+          } else if (charCode < 256) {
+            pushInput(258, charCode, 1);
+          }
+        }
+      };
       Module.gdKeyState = new Uint8Array(256);
       function handleKey(keyEvent, isDown) {
         if (!isInputReady() || window.__gdKeybindsOpen || window.__gdModsOpen) {
+          return;
+        }
+        // Typing in page text boxes (like the on-screen keyboard bar) isn't game input.
+        if (keyEvent.target && keyEvent.target.closest && keyEvent.target.closest("input, textarea, select")) {
           return;
         }
         try {
@@ -5056,14 +5376,18 @@ self.onmessage = async ({ data: e }) => {
             if (!canHandleTouch(touchStartEvent)) {
               return;
             }
-            for (
-              var touchIdx = 0;
-              touchIdx < touchStartEvent.changedTouches.length;
-              touchIdx++
+            // The game has one mouse: the first finger presses, extra
+            // fingers don't (otherwise lifting one would release the press).
+            if (
+              touchStartEvent.targetTouches.length ===
+              touchStartEvent.changedTouches.length
             ) {
-              var startTouch = touchStartEvent.changedTouches[touchIdx];
               try {
-                Module.gdInputQueue.push([513, 1, touchToPackedPos(startTouch)]);
+                Module.gdInputQueue.push([
+                  513,
+                  1,
+                  touchToPackedPos(touchStartEvent.changedTouches[0]),
+                ]);
               } catch (pushError1) {}
             }
             try {
@@ -5079,6 +5403,14 @@ self.onmessage = async ({ data: e }) => {
             if (!canHandleTouch(touchMoveEvent)) {
               return;
             }
+            // Dragging moves the cursor with the button held (lists, sliders).
+            try {
+              var moveQueue = Module.gdInputQueue,
+                movePacked = touchToPackedPos(touchMoveEvent.targetTouches[0]);
+              moveQueue.length && moveQueue[moveQueue.length - 1][0] === 512
+                ? (moveQueue[moveQueue.length - 1] = [512, 1, movePacked])
+                : moveQueue.push([512, 1, movePacked]);
+            } catch (pushError4) {}
             touchMoveEvent.preventDefault();
           },
           { passive: false },
@@ -5089,12 +5421,8 @@ self.onmessage = async ({ data: e }) => {
             if (window.__gdInputReady !== true) {
               return;
             }
-            for (
-              var endIdx = 0;
-              endIdx < touchEndEvent.changedTouches.length;
-              endIdx++
-            ) {
-              var endTouch = touchEndEvent.changedTouches[endIdx];
+            if (!touchEndEvent.targetTouches.length) {
+              var endTouch = touchEndEvent.changedTouches[0];
               try {
                 Module.gdInputQueue.push([514, 0, touchToPackedPos(endTouch)]);
                 Module.gdInputQueue.push([512, 0, touchToPackedPos(endTouch)]);
@@ -5107,7 +5435,7 @@ self.onmessage = async ({ data: e }) => {
         touchCanvas.addEventListener(
           "touchcancel",
           function (touchCancelEvent) {
-            if (window.__gdInputReady !== true) {
+            if (window.__gdInputReady !== true || touchCancelEvent.targetTouches.length) {
               return;
             }
             try {
