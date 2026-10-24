@@ -1620,6 +1620,8 @@ self.onmessage = async ({ data: e }) => {
           "cocos2d::CCSpawn::createWithTwoActions": 0x10034f80,
           "PauseLayer::onResume": 0x77e380,
           "cocos2d::CCSprite::createEmpty": 0x1008b5e0,
+          "FMODLevelVisualizer::create": 0x69e7b0,
+          "FMODLevelVisualizer::updateVisualizer": 0x69ecf0,
         };
       let instance = null,
         table = null,
@@ -4297,6 +4299,7 @@ self.onmessage = async ({ data: e }) => {
         getProfile: () => ({ name: "Player" }),
         getLevel: () => "",
         on,
+        peer: () => peer,
         connect,
         disconnect,
         send,
@@ -5360,6 +5363,17 @@ self.onmessage = async ({ data: e }) => {
           { id: "quickChatSfx", type: "bool", name: "Emote Sound Effects", description: "Plays sound effects when you or other players use certain emotes in levels.", default: true },
           { id: "quickChatSfxVolume", type: "float", name: "Emote SFX Volume", description: "Sets the volume of sound effects played when certain emotes are used in levels.", min: 0, max: 1, step: 0.05, default: 0.5 },
           { id: "emoteOpacity", type: "float", name: "Emote Opacity", description: "Sets the opacity of emotes.", min: 0, max: 1, step: 0.05, default: 1 },
+          { type: "title", name: "Voice chat" },
+          { id: "voiceChat", type: "bool", name: "Voice Chat", description: "Enable in-game voice chat: hold V to talk, B to deafen. Your browser asks for your microphone the first time you talk.", default: true },
+          { id: "playbackVolume", type: "float", name: "Voice Volume", description: "Adjust the global voice chat volume.", min: 0, max: 2, step: 0.05, default: 1 },
+          { id: "voiceProximity", type: "bool", name: "Voice Proximity (Plat)", description: "Enables proximity voice chat in platformer levels, meaning players get quieter the further away they are from you.", default: true },
+          { id: "classicProximity", type: "bool", name: "Voice Proximity (Classic)", description: "Enables proximity voice chat in classic levels, meaning players get quieter the further away they are from you.", default: false },
+          { id: "deafenNotification", type: "bool", name: "Deafen Notification", description: "Show a notification when you deafen or undeafen.", default: false },
+          { id: "voiceLoopback", type: "bool", name: "Voice Loopback", description: "Hear your own voice while speaking.", default: false },
+          { id: "voiceOverlay", type: "bool", name: "Voice Chat Overlay", description: "Show an overlay indicating which players are currently speaking.", default: true },
+          { id: "voiceOverlayThreshold", type: "float", name: "Volume Threshold", description: "Adjust how loud players have to be speaking to be shown on the voice overlay.", min: 0, max: 1, step: 0.01, default: 0.05 },
+          { id: "keyVoice", type: "key", name: "Voice chat key", default: "KeyV" },
+          { id: "keyDeafen", type: "key", name: "Deafen key", default: "KeyB" },
           { type: "title", name: "Emote keys (favorite emotes 1-8)" },
           ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ id: "emoteKey" + i, type: "key", name: "Favorite emote " + i, default: "" })),
           { type: "title", name: "Level UI" },
@@ -5502,6 +5516,12 @@ self.onmessage = async ({ data: e }) => {
           if (id === "self") return mem.ptr(local.layer + OFF.player1);
           const visual = visuals.get(id);
           return visual && !visual.hidden ? visual.player : 0;
+        },
+        levelLayer: () => local.layer,
+        isPlatformer: () => !!local.layer && !!mem.u8(local.layer + 0x309e),
+        isHiddenPlayer(id) {
+          const info = playerInfo(id);
+          return !!info && hidden.has(hideKey(info));
         },
         isNameShown: (id) => (id === "self" ? false : mod.settings.showNames && visuals.has(id)),
       };
@@ -7013,8 +7033,8 @@ self.onmessage = async ({ data: e }) => {
       const TABS = [
         ["Globed", ["General", ["autoconnect", "invitesFrom", "streamerMode"]]],
         ["Players", ["Players", ["playerOpacity", "quickChat", "quickChatSfx", "quickChatSfxVolume", "emoteOpacity", "showNames", "nameOpacity", "deathEffects"]]],
-        ["Level UI", ["Level UI", ["progressIndicators", "progressOpacity"]], ["Ping overlay", ["overlayEnabled", "overlayOpacity", "overlayPosition", "overlayAlwaysShow"]]],
-        ["Voice", ["Audio", []]],
+        ["Level UI", ["Level UI", ["progressIndicators", "progressOpacity"]], ["Voice Chat Overlay", ["voiceOverlay", "voiceOverlayThreshold"]], ["Ping overlay", ["overlayEnabled", "overlayOpacity", "overlayPosition", "overlayAlwaysShow"]]],
+        ["Voice", ["Audio", ["voiceChat", "playbackVolume", "voiceProximity", "classicProximity", "deafenNotification", "voiceLoopback"]]],
         ["Menus", ["Menus", []]],
       ];
       const SettingsLayer = {
@@ -7213,6 +7233,7 @@ self.onmessage = async ({ data: e }) => {
         ensureSprite,
         isLoaded: (name) => loaded.has(name),
         listNode,
+        playerIcon,
         queue: (task) => pending.push(task),
         open: () => loader.runOnGameThread((call) => openGlobed(loader.cocos(call))),
         menu: GlobedMenu,
@@ -7570,6 +7591,290 @@ self.onmessage = async ({ data: e }) => {
       });
 
       window.GlobedEmotes = { openList: openEmoteList, playSelfEmote, ensureAssets: () => Promise.all([ensure("bubble_emote_spr", "emotes_sprites/bubble_emote_spr.png")]) };
+    })();
+    // Globed's voice chat for the web port: push-to-talk (V) and deafen (B),
+    // sent over WebRTC audio calls between players in the same level, with
+    // proximity volume in platformer levels and Globed's voice overlay of who
+    // is speaking.
+    (function () {
+      const loader = GDModLoader,
+        net = window.GlobedNet,
+        PROXIMITY_LIMIT = 1200,
+        OVERLAY_PAD_X = 5;
+      const mod = () => window.GlobedWeb && window.GlobedWeb.mod;
+      const settings = () => (mod() ? mod().settings : {});
+      const enabled = () => mod() && mod().enabled && settings().voiceChat;
+
+      const voice = {
+        ctx: null,
+        out: null, // MediaStreamAudioDestinationNode: what we send (silent until we talk)
+        mic: null,
+        micGain: null,
+        micLevel: null,
+        micAsked: false,
+        talking: false,
+        deafened: false,
+        calls: new Map(), // peer id -> { call, audio, gain, analyser, data, loudness }
+      };
+
+      function context() {
+        if (!voice.ctx) {
+          voice.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          voice.out = voice.ctx.createMediaStreamDestination();
+        }
+        if (voice.ctx.state === "suspended") voice.ctx.resume().catch(() => {});
+        return voice.ctx;
+      }
+      function analyser(source) {
+        const node = voice.ctx.createAnalyser();
+        node.fftSize = 512;
+        source.connect(node);
+        return { node, data: new Float32Array(node.fftSize) };
+      }
+      function loudness(meter) {
+        meter.node.getFloatTimeDomainData(meter.data);
+        let sum = 0;
+        for (const sample of meter.data) sum += sample * sample;
+        return Math.min(1, Math.sqrt(sum / meter.data.length) * 4);
+      }
+
+      // The microphone is asked for the first time you talk.
+      async function ensureMic() {
+        if (voice.mic || voice.micAsked) return !!voice.mic;
+        voice.micAsked = true;
+        try {
+          const ctx = context(),
+            stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }),
+            source = ctx.createMediaStreamSource(stream);
+          voice.mic = stream;
+          voice.micGain = ctx.createGain();
+          voice.micGain.gain.value = voice.talking ? 1 : 0;
+          source.connect(voice.micGain);
+          voice.micGain.connect(voice.out);
+          voice.micLevel = analyser(voice.micGain);
+          if (settings().voiceLoopback) voice.micGain.connect(ctx.destination);
+          return true;
+        } catch (micError) {
+          console.warn("[globed] No microphone", micError);
+          window.GlobedUI.queue((ui) => ui.alert("Voice Chat", "Globed couldn't use your <cr>microphone</c>. Allow microphone access for this site in your browser to talk."));
+          return false;
+        }
+      }
+      function setTalking(talking) {
+        if (voice.talking === talking) return;
+        voice.talking = talking;
+        if (talking) ensureMic();
+        if (voice.micGain) voice.micGain.gain.setTargetAtTime(talking ? 1 : 0, voice.ctx.currentTime, 0.01);
+      }
+
+      // ------------------------------------------------------------ calls
+      function setupCall(call) {
+        const entry = { call, audio: null, gain: null, meter: null, loudness: 0, since: performance.now() };
+        voice.calls.set(call.peer, entry);
+        call.on("stream", (stream) => {
+          const ctx = context();
+          // Chrome only plays WebRTC audio through Web Audio if the stream
+          // is also attached to a (muted) media element.
+          entry.audio = new Audio();
+          entry.audio.muted = true;
+          entry.audio.srcObject = stream;
+          entry.audio.play().catch(() => {});
+          const source = ctx.createMediaStreamSource(stream);
+          entry.gain = ctx.createGain();
+          entry.gain.gain.value = 0;
+          source.connect(entry.gain);
+          entry.gain.connect(ctx.destination);
+          entry.meter = analyser(source);
+        });
+        const drop = () => {
+          if (voice.calls.get(call.peer) === entry) voice.calls.delete(call.peer);
+          if (entry.audio) entry.audio.srcObject = null;
+          if (entry.gain) entry.gain.disconnect();
+        };
+        call.on("close", drop);
+        call.on("error", drop);
+        return entry;
+      }
+      let peerHooked = null;
+      function hookPeer() {
+        const peer = net.peer && net.peer();
+        if (!peer || peerHooked === peer) return;
+        peerHooked = peer;
+        peer.on("call", (call) => {
+          if (!enabled()) {
+            call.close();
+            return;
+          }
+          context();
+          const old = voice.calls.get(call.peer);
+          if (old) old.call.close();
+          call.answer(voice.out.stream);
+          setupCall(call);
+        });
+      }
+      // Calls follow who is in the level with us.
+      function syncCalls(players) {
+        const peer = net.peer && net.peer(),
+          wanted = new Set(enabled() && peer && net.state === "connected" ? players.map((player) => player.id) : []);
+        // (A call can arrive just before their level state does.)
+        for (const [id, entry] of voice.calls) {
+          if (!wanted.has(id) && performance.now() - entry.since > 3000) entry.call.close();
+        }
+        if (!wanted.size) return;
+        for (const id of wanted) {
+          // One side calls: the lower ID.
+          if (voice.calls.has(id) || !(net.myId < id)) continue;
+          context();
+          setupCall(peer.call(id, voice.out.stream, { metadata: { globed: 1 } }));
+        }
+      }
+
+      // ---------------------------------------------------------- volumes
+      function updateVolumes(ui) {
+        const base = voice.deafened ? 0 : Math.max(0, settings().playbackVolume ?? 1),
+          platformer = window.GlobedWeb.isPlatformer(),
+          proximity = platformer ? settings().voiceProximity : settings().classicProximity,
+          me = window.GlobedWeb.playerNode("self"),
+          [mx, my] = me ? ui.getPos(me) : [0, 0];
+        for (const [id, entry] of voice.calls) {
+          if (!entry.gain) continue;
+          let volume = base;
+          if (proximity && me) {
+            const node = window.GlobedWeb.playerNode(id);
+            if (node) {
+              const [x, y] = ui.getPos(node),
+                t = Math.min(1, Math.hypot(x - mx, y - my) / PROXIMITY_LIMIT);
+              volume *= 1 - t * t;
+            }
+          }
+          if (window.GlobedWeb.isHiddenPlayer(id)) volume = 0;
+          entry.gain.gain.setTargetAtTime(volume, voice.ctx.currentTime, 0.05);
+          entry.loudness = entry.meter ? loudness(entry.meter) : 0;
+        }
+      }
+
+      // ------------------------------------------------------ voice overlay
+      // Globed's VoiceOverlay: who's speaking, in a corner of the screen.
+      const overlay = { node: 0, layer: 0, cells: new Map() };
+      function updateOverlay(ui, players) {
+        const layer = window.GlobedWeb.levelLayer();
+        if (overlay.layer !== layer) {
+          overlay.layer = layer;
+          overlay.node = 0;
+          overlay.cells.clear();
+        }
+        if (!layer || !settings().voiceOverlay) return;
+        if (!overlay.node) {
+          overlay.node = ui.node();
+          ui.add(layer, overlay.node, 1001);
+        }
+        const threshold = settings().voiceOverlayThreshold ?? 0.05,
+          now = performance.now(),
+          speakers = [];
+        if (voice.micLevel && voice.talking) speakers.push(["self", loudness(voice.micLevel)]);
+        for (const [id, entry] of voice.calls) speakers.push([id, entry.loudness]);
+        for (const [id, level] of speakers) {
+          let cell = overlay.cells.get(id);
+          if (level >= threshold) {
+            if (!cell) {
+              const info = id === "self" ? window.GlobedWeb.profile() : players.find((player) => player.id === id);
+              if (!info) continue;
+              cell = createCell(ui, info);
+              overlay.cells.set(id, cell);
+            }
+            cell.lastSpoken = now;
+          }
+          if (cell) {
+            cell.max = Math.max(cell.max, level);
+            ui.inv("FMODLevelVisualizer::updateVisualizer", [cell.visualizer, { f32: level }, { f32: cell.max }, { f32: 0 }]);
+          }
+        }
+        for (const [id, cell] of overlay.cells) {
+          const stillThere = id === "self" ? voice.talking : voice.calls.has(id);
+          if (!stillThere || now - cell.lastSpoken > 1000) {
+            ui.remove(cell.node);
+            overlay.cells.delete(id);
+          }
+        }
+        // Stack the cells from the bottom right corner (default position).
+        const [w] = ui.winSize(),
+          padY = 26;
+        let y = padY;
+        for (const cell of overlay.cells.values()) {
+          ui.pos(cell.node, w - OVERLAY_PAD_X - cell.width, y);
+          y += cell.height + 3;
+        }
+      }
+      function createCell(ui, info) {
+        const node = ui.node(),
+          icon = window.GlobedUI.playerIcon(ui, info),
+          name = ui.label(info.name || "Player", "bigFont.fnt", 0.525),
+          visualizer = ui.ptr("FMODLevelVisualizer::create");
+        ui.scale(icon, 0.45);
+        ui.rotation(visualizer, 90);
+        ui.scaleXY(visualizer, 0.4, 0.5);
+        const [iw, ih] = ui.scaledSize(icon),
+          [nw] = ui.scaledSize(name),
+          vw = 32,
+          height = ih * 1.3 + 6,
+          width = vw + 5 + nw + 5 + iw + 10;
+        const background = ui.scale9("square02_001.png", width * 3, height * 3);
+        ui.scale(background, 1 / 3);
+        ui.color(background, [0, 0, 0]);
+        ui.opacity(background, 90);
+        ui.anchor(background, 0, 0);
+        ui.add(node, background, -1);
+        let x = 5;
+        // The rotated visualizer draws centered about 9 units left of its
+        // position.
+        ui.pos(visualizer, x + vw / 2 + 9, height / 2);
+        x += vw + 5;
+        ui.anchor(name, 0, 0.5);
+        ui.pos(name, x, height / 2);
+        x += nw + 5;
+        ui.pos(icon, x + iw / 2, height / 2);
+        ui.add(node, visualizer);
+        ui.add(node, name);
+        ui.add(node, icon);
+        ui.add(overlay.node, node);
+        return { node, visualizer, width, height, lastSpoken: 0, max: 0 };
+      }
+
+      // --------------------------------------------------------- keybinds
+      const typing = (event) => event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
+      document.addEventListener("keydown", (event) => {
+        if (event.repeat || typing(event) || !enabled() || net.state !== "connected" || !window.GlobedWeb.isInLevel()) return;
+        if (event.code === (settings().keyVoice || "KeyV")) setTalking(true);
+        if (event.code === (settings().keyDeafen || "KeyB")) {
+          voice.deafened = !voice.deafened;
+          if (settings().deafenNotification) window.GlobedUI.queue((ui) => ui.toast(voice.deafened ? "Deafened Voice Chat" : "Undeafened Voice Chat"));
+        }
+      });
+      document.addEventListener("keyup", (event) => {
+        if (event.code === (settings().keyVoice || "KeyV")) setTalking(false);
+      });
+      window.addEventListener("blur", () => setTalking(false));
+
+      loader.onFrame((call) => {
+        if (net.state === "connected") hookPeer();
+        const inLevel = window.GlobedWeb && window.GlobedWeb.isInLevel(),
+          players = inLevel ? window.GlobedWeb.levelPlayers() : [];
+        if (!inLevel) setTalking(false);
+        syncCalls(players);
+        if (!voice.calls.size && !voice.talking && !overlay.cells.size) return;
+        const ui = loader.cocos(call);
+        if (voice.ctx) updateVolumes(ui);
+        if (inLevel) updateOverlay(ui, players);
+      });
+
+      window.GlobedVoice = {
+        state: voice,
+        isTalking: () => voice.talking,
+        speaking: (id) => {
+          const entry = voice.calls.get(id);
+          return !!entry && entry.loudness >= (settings().voiceOverlayThreshold ?? 0.05);
+        },
+      };
     })();
     </script>
 
