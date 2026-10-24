@@ -533,6 +533,82 @@
       display: none;
     }
 
+    .gd-jukebox h4 {
+      margin: 14px 0 6px;
+      font-size: 14px;
+    }
+
+    .gd-jukebox-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin: 6px 0;
+    }
+
+    .gd-jukebox input[type="text"],
+    .gd-jukebox input[type="number"] {
+      width: 120px;
+      padding: 4px 8px;
+      border: 1px solid #ffffff40;
+      border-radius: 4px;
+      background: #ffffff14;
+      color: inherit;
+      font: inherit;
+      font-size: 12px;
+    }
+
+    .gd-jukebox input[type="file"] {
+      max-width: 220px;
+      font-size: 12px;
+    }
+
+    .gd-jukebox-list {
+      display: grid;
+      gap: 2px;
+      margin: 6px 0;
+    }
+
+    .gd-jukebox-song {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      border-top: 1px solid #ffffff12;
+    }
+
+    .gd-jukebox-song > span {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .gd-jukebox-song small {
+      display: block;
+      color: #999;
+    }
+
+    .gd-jukebox-status {
+      margin: 8px 0 0;
+      color: #9dcaff;
+      font-size: 12px;
+    }
+
+    #gd-fps-counter {
+      position: absolute;
+      bottom: 1cqw;
+      left: 1cqw;
+      z-index: 5;
+      color: #fff;
+      font: bold 1.1cqw sans-serif;
+      text-shadow: 0 0 3px #000, 1px 1px 0 #000;
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    #gd-fps-counter[hidden] {
+      display: none;
+    }
+
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
@@ -1286,7 +1362,7 @@ self.onmessage = async ({ data: e }) => {
           "MenuLayer::onMoreGames": 0x735740,
           "ButtonSprite::create": 0x43f1c0,
           "CCMenuItemSpriteExtra::create": 0x444bb0,
-          "cocos2d::CCDelayTime::create": 0x10033820,
+          "PlayLayer::delayedResetLevel": 0x7b8cf0,
           "cocos2d::CCTransitionFade::create": 0x10052dd0,
           "cocos2d::CCDrawNode::vtable": 0x100e6710,
           "GJBaseGameLayer::update": 0x637850,
@@ -1311,6 +1387,10 @@ self.onmessage = async ({ data: e }) => {
           "GameStatsManager::setStarsForMapPack": 0x5df060,
           "GameStatsManager::awardSecretKey": 0x5f19f0,
           "GJBaseGameLayer::updateDebugDraw": 0x610800,
+          "MusicDownloadManager::isSongDownloaded": 0x73f250,
+          "LevelTools::getAudioFileName": 0x728470,
+          "LevelTools::getAudioTitle": 0x7278f0,
+          "GJBaseGameLayer::shakeCamera": 0x63bc50,
         };
       let instance = null,
         table = null,
@@ -1487,6 +1567,7 @@ self.onmessage = async ({ data: e }) => {
           this.entry = entry;
           this.regs = cpuView(cpu);
           this.handled = false;
+          this.index = 0;
         }
         // Integer/pointer argument by position (0 is `this` for methods).
         arg(i) {
@@ -1527,13 +1608,16 @@ self.onmessage = async ({ data: e }) => {
           emulateReturn(this.regs);
           this.handled = true;
         }
-        // Run the game's function now; afterwards the handler can read or
-        // change the return value with result()/setResult().
+        // Run the rest of the hook chain (later mods' handlers) and then the
+        // game's function; afterwards the handler can read or change the
+        // return value with result()/setResult().
         callOriginal() {
           if (this.handled) return this.result();
-          this.entry.bypass = true;
-          runLifted(this.entry.slot, this.cpu);
-          this.handled = true;
+          if (!runHandlers(this, this.index + 1)) {
+            this.entry.bypass = true;
+            runLifted(this.entry.slot, this.cpu);
+            this.handled = true;
+          }
           return this.result();
         }
         result() {
@@ -1553,6 +1637,26 @@ self.onmessage = async ({ data: e }) => {
         }
       }
 
+      // Runs handlers from `start` on; each can skip the function or call
+      // callOriginal(), which nests the remaining handlers (like Geode hooks).
+      // Returns true once the call has been handled.
+      function runHandlers(call, start) {
+        const handlers = call.entry.handlers;
+        for (let i = start; i < handlers.length; i++) {
+          const handler = handlers[i];
+          if (handler.mod && !handler.mod.enabled) continue;
+          call.index = i;
+          try {
+            handler.fn(call, handler.mod);
+          } catch (hookError) {
+            console.error("[mods] " + (handler.mod ? handler.mod.id : "hook") + " failed in " + call.entry.name, hookError);
+            if (handler.mod) handler.mod.enabled = false;
+          }
+          if (call.handled) return true;
+        }
+        return false;
+      }
+
       function dispatch(cpu, id) {
         const entry = hookEntries[id];
         if (entry.bypass) {
@@ -1560,19 +1664,10 @@ self.onmessage = async ({ data: e }) => {
           return 0;
         }
         frameCpu = cpu;
-        let call = null;
-        for (const handler of entry.handlers) {
-          if (handler.mod && !handler.mod.enabled) continue;
-          call = call || new HookCall(cpu, entry);
-          try {
-            handler.fn(call, handler.mod);
-          } catch (hookError) {
-            console.error("[mods] " + (handler.mod ? handler.mod.id : "hook") + " failed in " + entry.name, hookError);
-            if (handler.mod) handler.mod.enabled = false;
-          }
-          if (call.handled) return 1;
+        if (!entry.handlers.some((handler) => !handler.mod || handler.mod.enabled)) {
+          return 0;
         }
-        return 0;
+        return runHandlers(new HookCall(cpu, entry), 0) ? 1 : 0;
       }
 
       function hook(target, fn, mod = null) {
@@ -1735,8 +1830,54 @@ self.onmessage = async ({ data: e }) => {
         }
       });
 
+      // GJBaseGameLayer fields without a stable binding offset, located from
+      // m_debugDrawNode (found by its CCDrawNode vtable). Member order from
+      // Geode's bindings: m_debugDrawNode, m_debugDrawPoints,
+      // m_isDebugDrawEnabled, m_disablePlayerHitbox, m_hitboxesOnDeath,
+      // m_anticheatSpike, m_timestamp, m_isBetweenSteps, m_clickBetweenSteps,
+      // m_clickOnSteps; m_queuedButtons sits 0x470 bytes before the draw node.
+      let gameLayerFields = null;
+      function getGameLayerFields(layer) {
+        if (gameLayerFields || !layer) return gameLayerFields;
+        const vtable = addresses["cocos2d::CCDrawNode::vtable"],
+          limit = memory.buffer.byteLength - 16;
+        for (let offset = 0x400; offset < 0x8000; offset += 8) {
+          const p = mem.ptr(layer + offset);
+          if (p > 0x10000 && p < limit && p % 8 === 0 && mem.ptr(p) === vtable) {
+            gameLayerFields = {
+              debugDrawNode: offset,
+              debugDrawEnabled: offset + 16,
+              hitboxesOnDeath: offset + 18,
+              anticheatSpike: offset + 24,
+              timestamp: offset + 32,
+              clickBetweenSteps: offset + 41,
+              clickOnSteps: offset + 42,
+              queuedButtons: offset - 0x470,
+            };
+            break;
+          }
+        }
+        return gameLayerFields;
+      }
+
+      // Async work mods need done after the file system and saves are ready
+      // but before the game starts (e.g. putting files in place).
+      const bootTasks = [];
+      async function runBeforeBoot() {
+        for (const task of bootTasks) {
+          try {
+            await task();
+          } catch (taskError) {
+            console.error("[mods] startup task failed", taskError);
+          }
+        }
+      }
+
       return {
         addresses,
+        getGameLayerFields,
+        beforeBoot: (task) => bootTasks.push(task),
+        runBeforeBoot,
         // Extra {name, find, replace} edits for the game's JS glue (audio,
         // input bridge); applied by the page together with its own patches.
         gluePatches: [],
@@ -1954,7 +2095,7 @@ self.onmessage = async ({ data: e }) => {
         (event) => {
           if (window.__gdModsOpen && capturing) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             const mod = loader.getMod(selectedId);
             if (event.code === "Backspace") mod.setSetting(capturing.id, "");
             else if (event.code !== "Escape") mod.setSetting(capturing.id, event.code);
@@ -1965,11 +2106,11 @@ self.onmessage = async ({ data: e }) => {
           const typing = event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
           if (event.code === "Tab" && !typing && window.__gdInputReady && !window.__gdKeybindsOpen) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             window.__gdModsOpen ? close() : open();
           } else if (event.code === "Escape" && window.__gdModsOpen) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             close();
           }
         },
@@ -2035,7 +2176,7 @@ self.onmessage = async ({ data: e }) => {
         frameTimes = [],
         sessionStart = Date.now();
       let fields = null,
-        inDestroyPlayer = false,
+        deathAt = 0,
         labelBox = null;
 
       const s = () => mod.settings;
@@ -2045,25 +2186,7 @@ self.onmessage = async ({ data: e }) => {
       };
       const safeModeActive = () => mod.enabled && (s().safeMode || (s().autoSafeMode && isCheating()));
 
-      // GJBaseGameLayer's m_debugDrawNode is followed by m_debugDrawPoints,
-      // m_isDebugDrawEnabled, m_disablePlayerHitbox, m_hitboxesOnDeath and
-      // m_anticheatSpike. Find the draw node by its vtable.
-      function findFields(layer) {
-        const vtable = loader.addresses["cocos2d::CCDrawNode::vtable"],
-          limit = Module.HEAPU8.length - 16;
-        for (let offset = 0x400; offset < 0x8000; offset += 8) {
-          const p = mem.ptr(layer + offset);
-          if (p > 0x10000 && p < limit && p % 8 === 0 && mem.ptr(p) === vtable) {
-            return {
-              debugDrawNode: offset,
-              debugDrawEnabled: offset + 16,
-              hitboxesOnDeath: offset + 18,
-              anticheatSpike: offset + 24,
-            };
-          }
-        }
-        return null;
-      }
+      const findFields = (layer) => loader.getGameLayerFields(layer);
 
       function setAudioSpeed(next) {
         const audio = Module.__gdAudio,
@@ -2161,15 +2284,13 @@ self.onmessage = async ({ data: e }) => {
               call.skip();
               return;
             }
-            inDestroyPlayer = true;
-            try {
-              call.callOriginal();
-            } finally {
-              inDestroyPlayer = false;
-            }
+            if (!isAnticheat && !deathAt) deathAt = performance.now();
           });
-          mod.hook("cocos2d::CCDelayTime::create", (call) => {
-            if (inDestroyPlayer && settings.respawnDelayEnabled) call.setFloat(0, settings.respawnDelay);
+          // The game respawns from its own update timer; hold its reset back
+          // or trigger it early to get the chosen delay.
+          const respawnDue = () => performance.now() - deathAt >= settings.respawnDelay * 1000;
+          mod.hook("PlayLayer::delayedResetLevel", (call) => {
+            if (settings.respawnDelayEnabled && deathAt && !respawnDue()) call.skip();
           });
           mod.hook("PlayerObject::playDeathEffect", (call) => {
             if (settings.noDeathEffect) call.skip();
@@ -2177,6 +2298,10 @@ self.onmessage = async ({ data: e }) => {
 
           mod.hook("GJBaseGameLayer::update", (call) => {
             const layer = call.arg(0);
+            if (settings.respawnDelayEnabled && deathAt && layer === level.layer && respawnDue()) {
+              deathAt = 0;
+              call.invoke("PlayLayer::delayedResetLevel", [layer]);
+            }
             if (layer === level.layer) {
               level.frames++;
               if (level.diedThisFrame) level.deathFrames++;
@@ -2210,10 +2335,12 @@ self.onmessage = async ({ data: e }) => {
             }
           });
           mod.hook("PlayLayer::resetLevel", (call) => {
+            deathAt = 0;
             if (call.arg(0) === level.layer) level.attempts++;
             level.frames = level.deathFrames = level.deaths = 0;
           });
           mod.hook("PlayLayer::onQuit", () => {
+            deathAt = 0;
             level.layer = 0;
           });
 
@@ -2330,6 +2457,556 @@ self.onmessage = async ({ data: e }) => {
         true,
       );
     })();
+    // Click Between Frames (web port). The game stamps every queued input
+    // with the time it read it (the start of the next frame). This port turns
+    // on the game's own "click between steps" and gives each queued input the
+    // time the browser saw it, so it lands on the physics step (1/240 s) when
+    // it really happened instead of at the next frame.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        COMMAND_SIZE = 24, // PlayerButtonCommand: button, isPush, isPlayer2, step, timestamp
+        BUTTON_FOR_CODE = {
+          Space: 1, ArrowUp: 1, KeyW: 1,
+          ArrowLeft: 2, KeyA: 2,
+          ArrowRight: 3, KeyD: 3,
+        },
+        events = [];
+
+      function record(button, push, timeStamp) {
+        if (!mod.enabled || !window.__gdInputReady || window.__gdModsOpen || window.__gdKeybindsOpen) return;
+        events.push({ button, push, time: window.__gdEventTime(timeStamp) / 1000, used: false });
+        if (events.length > 64) events.shift();
+      }
+      function onKey(event) {
+        if (event.repeat) return;
+        const remaps = window.__gdKeybinds ? window.__gdKeybinds.get() : {},
+          button = BUTTON_FOR_CODE[remaps[event.code] || event.code];
+        if (button) record(button, event.type === "keydown", event.timeStamp);
+      }
+      function onPointer(event) {
+        if (event.target !== document.getElementById("canvas")) return;
+        if (event.type.startsWith("mouse") && event.button !== 0) return;
+        record(1, event.type === "mousedown" || event.type === "touchstart", event.timeStamp);
+      }
+      window.addEventListener("keydown", onKey, true);
+      window.addEventListener("keyup", onKey, true);
+      for (const type of ["mousedown", "mouseup", "touchstart", "touchend"]) {
+        window.addEventListener(type, onPointer, { capture: true, passive: true });
+      }
+
+      const mod = loader.registerMod({
+        id: "syzzi.click_between_frames",
+        name: "Click Between Frames",
+        developer: "syzzi (web port)",
+        version: "web 1.0",
+        description:
+          "Inputs register at the moment you press, not at the start of the next frame. Uses the game's built-in click-between-steps with each input's real time from the browser, so a click lands on the right physics step (1/240 s).",
+        setup(mod) {
+          mod.hook("GJBaseGameLayer::update", (call) => {
+            const layer = call.arg(0),
+              fields = loader.getGameLayerFields(layer);
+            if (!fields) return;
+            mem.setU8(layer + fields.clickBetweenSteps, 1);
+            mem.setU8(layer + fields.clickOnSteps, 0);
+            const frameStart = mem.f64(layer + fields.timestamp),
+              begin = mem.ptr(layer + fields.queuedButtons),
+              end = mem.ptr(layer + fields.queuedButtons + 8);
+            if (!begin || end < begin || (end - begin) % COMMAND_SIZE) return;
+            for (let entry = begin; entry < end; entry += COMMAND_SIZE) {
+              const button = mem.i32(entry),
+                push = mem.u8(entry + 4) === 1,
+                readAt = mem.f64(entry + 16),
+                match = events.find((e) => !e.used && e.button === button && e.push === push && e.time <= readAt + 0.002);
+              if (!match) continue;
+              match.used = true;
+              // Keep it inside the frame the game is about to simulate (at most
+              // one 60 Hz frame back, so lag spikes don't strand it).
+              const earliest = Math.max(frameStart + 1e-6, readAt - 1 / 60);
+              mem.setF64(entry + 16, Math.min(readAt, Math.max(earliest, match.time)));
+            }
+            while (events.length && (events[0].used || events[0].time < frameStart - 1)) events.shift();
+          });
+        },
+      });
+    })();
+    // Jukebox (web port): swap any song (Newgrounds song IDs and main level
+    // songs) for a NONG, from an MP3 you pick or from Song File Hub. NONGs
+    // are kept in IndexedDB; the active one is written over the song file
+    // the game reads (e.g. /Resources/1323633.mp3) and served to the audio
+    // engine even if the game downloads the original again.
+    (function () {
+      const loader = GDModLoader,
+        DB_NAME = "gd-jukebox",
+        ACTIVE_KEY = "gd-jukebox-active",
+        SFH_INDEX_URL = "https://raw.githubusercontent.com/FlafyDev/auto-nong-indexes/v2/sfh-index.min.json",
+        songBytes = new Map(), // file name -> Uint8Array for active NONGs
+        originals = new Map(), // file name -> the game's own file, restored on "Default"
+        mainSongs = [], // [{ file, title }] read from the game
+        ui = { key: "", status: "", results: null, busy: false };
+      let active = {},
+        dbPromise = null,
+        sfhIndex = null,
+        lastSongId = 0;
+
+      try {
+        active = JSON.parse(localStorage.getItem(ACTIVE_KEY) || "{}") || {};
+      } catch (activeError) {
+        active = {};
+      }
+      function saveActive() {
+        try {
+          localStorage.setItem(ACTIVE_KEY, JSON.stringify(active));
+        } catch (activeError) {}
+      }
+
+      function db() {
+        if (!dbPromise) {
+          dbPromise = new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = () => {
+              const store = request.result.createObjectStore("songs", { keyPath: "uid" });
+              store.createIndex("file", "file");
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          dbPromise.catch(() => {
+            dbPromise = null;
+          });
+        }
+        return dbPromise;
+      }
+      function tx(mode, fn) {
+        return db().then(
+          (database) =>
+            new Promise((resolve, reject) => {
+              const transaction = database.transaction("songs", mode),
+                result = fn(transaction.objectStore("songs"));
+              transaction.oncomplete = () => resolve(result && "result" in result ? result.result : undefined);
+              transaction.onerror = transaction.onabort = () => reject(transaction.error);
+            }),
+        );
+      }
+      const getSong = (uid) => tx("readonly", (store) => store.get(uid));
+      const listSongs = (file) => tx("readonly", (store) => store.index("file").getAll(file));
+      const putSong = (song) => tx("readwrite", (store) => store.put(song));
+      const deleteSong = (uid) => tx("readwrite", (store) => store.delete(uid));
+
+      // file name helpers: Newgrounds songs are "<id>.mp3".
+      const fileForId = (id) => id + ".mp3";
+      const idForFile = (file) => (/^(\d+)\.mp3$/i.exec(file) || [])[1];
+      function describe(file) {
+        const id = idForFile(file);
+        if (id) return "Song ID " + id;
+        const main = mainSongs.find((song) => song.file === file);
+        return main ? main.title + " (main level)" : file;
+      }
+
+      function fsPath(file) {
+        return "/Resources/" + file;
+      }
+      function writeGameFile(file, bytes) {
+        const path = fsPath(file);
+        if (!originals.has(file)) {
+          try {
+            originals.set(file, Module.FS.readFile(path));
+          } catch (readError) {
+            originals.set(file, null);
+          }
+        }
+        Module.FS.writeFile(path, bytes);
+      }
+      function restoreGameFile(file) {
+        if (!originals.has(file)) return;
+        const original = originals.get(file);
+        originals.delete(file);
+        try {
+          if (original) Module.FS.writeFile(fsPath(file), original);
+          else Module.FS.unlink(fsPath(file));
+        } catch (restoreError) {}
+      }
+
+      // Puts the active NONG (or the original song) in place for a file.
+      async function apply(file) {
+        const uid = mod.enabled ? active[file] : null;
+        if (!uid) {
+          songBytes.delete(file);
+          restoreGameFile(file);
+          return;
+        }
+        const song = await getSong(uid);
+        if (!song) {
+          delete active[file];
+          saveActive();
+          songBytes.delete(file);
+          restoreGameFile(file);
+          return;
+        }
+        const bytes = new Uint8Array(song.data);
+        songBytes.set(file, bytes);
+        writeGameFile(file, bytes);
+      }
+      const applyAll = () => Promise.all(Object.keys(active).concat([...originals.keys()]).map(apply));
+
+      loader.gluePatches.push({
+        name: "Jukebox song override",
+        find: "var data=null;var cands=this.candidates(path);",
+        replace: "var data=window.__gdSongOverride?window.__gdSongOverride(path):null;var cands=this.candidates(path);",
+      });
+      window.__gdSongOverride = function (path) {
+        const file = String(path).split(/[\\/]/).pop();
+        return songBytes.get(file) || songBytes.get(Object.keys(active).find((f) => f.toLowerCase() === file.toLowerCase())) || null;
+      };
+
+      async function loadSfhIndex() {
+        if (sfhIndex) return sfhIndex;
+        let response = null;
+        try {
+          const cache = await caches.open("gd-jukebox-index");
+          response = await cache.match(SFH_INDEX_URL);
+          // Refresh at most once a day.
+          if (response && Date.now() - Number(response.headers.get("x-fetched") || 0) > 86400000) response = null;
+          if (!response) {
+            const fresh = await fetch(SFH_INDEX_URL, { cache: "no-store" });
+            if (!fresh.ok) throw new Error("HTTP " + fresh.status);
+            const body = await fresh.blob();
+            await cache.put(SFH_INDEX_URL, new Response(body, { headers: { "x-fetched": String(Date.now()) } }));
+            response = new Response(body);
+          }
+        } catch (cacheError) {
+          response = await fetch(SFH_INDEX_URL);
+        }
+        const json = await response.json(),
+          byId = new Map();
+        for (const [key, song] of Object.entries((json.nongs && json.nongs.hosted) || {})) {
+          for (const id of song.songs || []) {
+            if (!byId.has(id)) byId.set(id, []);
+            byId.get(id).push({ key, name: song.name, artist: song.artist, url: song.url });
+          }
+        }
+        sfhIndex = byId;
+        return byId;
+      }
+
+      async function addSong(file, info, data) {
+        const song = {
+          uid: file + ":" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          file,
+          name: info.name || "Unknown",
+          artist: info.artist || "",
+          source: info.source,
+          sourceKey: info.sourceKey || "",
+          addedAt: Date.now(),
+          data,
+        };
+        await putSong(song);
+        active[file] = song.uid;
+        saveActive();
+        await apply(file);
+        return song;
+      }
+
+      // ------------------------------------------------------------------ UI
+      function el(tag, props = {}, ...children) {
+        const node = document.createElement(tag);
+        for (const [key, value] of Object.entries(props)) {
+          if (key === "text") node.textContent = value;
+          else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+          else if (value != null) node.setAttribute(key, value);
+        }
+        node.append(...children.filter((child) => child != null));
+        return node;
+      }
+      function refresh() {
+        if (ui.container && ui.container.isConnected) render(ui.container);
+      }
+      function setStatus(text) {
+        ui.status = text;
+        refresh();
+      }
+
+      async function render(container) {
+        ui.container = container;
+        const key = ui.key,
+          songs = key ? await listSongs(key).catch(() => []) : [],
+          box = el("div", { class: "gd-jukebox" });
+
+        // Song picker
+        const idInput = el("input", { type: "number", min: "1", placeholder: "Song ID", "aria-label": "Song ID", value: idForFile(key) || "" }),
+          mainSelect = el("select", { "aria-label": "Main level song" }, el("option", { value: "", text: "Main level song…" }));
+        for (const song of mainSongs) {
+          const option = el("option", { value: song.file, text: song.title });
+          option.selected = song.file === key;
+          mainSelect.appendChild(option);
+        }
+        mainSelect.addEventListener("change", () => {
+          if (mainSelect.value) {
+            ui.key = mainSelect.value;
+            ui.results = null;
+            refresh();
+          }
+        });
+        const pick = el("div", { class: "gd-jukebox-row" },
+          idInput,
+          el("button", { type: "button", text: "Open", onclick: () => {
+            const id = parseInt(idInput.value, 10);
+            if (id > 0) {
+              ui.key = fileForId(id);
+              ui.results = null;
+              refresh();
+            }
+          } }),
+          lastSongId ? el("button", { type: "button", text: "Last level's song (" + lastSongId + ")", onclick: () => {
+            ui.key = fileForId(lastSongId);
+            ui.results = null;
+            refresh();
+          } }) : null,
+          mainSongs.length ? mainSelect : null,
+        );
+        box.appendChild(pick);
+
+        if (key) {
+          box.appendChild(el("h4", { text: describe(key) }));
+          const list = el("div", { class: "gd-jukebox-list", role: "radiogroup", "aria-label": "Song to play" });
+          const option = (uid, label, sub) => {
+            const radio = el("input", { type: "radio", name: "gd-jukebox-active", "aria-label": label });
+            radio.checked = (active[key] || "") === uid;
+            radio.addEventListener("change", async () => {
+              if (uid) active[key] = uid;
+              else delete active[key];
+              saveActive();
+              await apply(key);
+              refresh();
+            });
+            return el("label", { class: "gd-jukebox-song" }, radio, el("span", {}, label, sub ? el("small", { text: sub }) : null));
+          };
+          list.appendChild(option("", "Default song", "The game's own song"));
+          for (const song of songs) {
+            const row = option(song.uid, song.name, [song.artist, song.source === "sfh" ? "Song File Hub" : "Your file", (song.data.byteLength / 1048576).toFixed(1) + " MB"].filter(Boolean).join(" · "));
+            row.appendChild(el("button", { type: "button", text: "Delete", "aria-label": "Delete " + song.name, onclick: async (event) => {
+              event.preventDefault();
+              await deleteSong(song.uid);
+              if (active[key] === song.uid) {
+                delete active[key];
+                saveActive();
+                await apply(key);
+              }
+              refresh();
+            } }));
+            list.appendChild(row);
+          }
+          box.appendChild(list);
+
+          // Add a local file
+          const fileInput = el("input", { type: "file", accept: "audio/*,.mp3,.ogg", "aria-label": "MP3 file" }),
+            nameInput = el("input", { type: "text", placeholder: "Song name", "aria-label": "Song name" }),
+            artistInput = el("input", { type: "text", placeholder: "Artist", "aria-label": "Artist" });
+          fileInput.addEventListener("change", () => {
+            const picked = fileInput.files[0];
+            if (picked && !nameInput.value) nameInput.value = picked.name.replace(/\.[^.]+$/, "");
+          });
+          box.appendChild(el("div", { class: "gd-jukebox-row" }, fileInput, nameInput, artistInput,
+            el("button", { type: "button", text: "Add file", onclick: async () => {
+              const picked = fileInput.files[0];
+              if (!picked) return setStatus("Pick an MP3 file first.");
+              setStatus("Adding " + picked.name + "…");
+              try {
+                await addSong(key, { name: nameInput.value || picked.name, artist: artistInput.value, source: "file" }, await picked.arrayBuffer());
+                setStatus("Added and selected " + (nameInput.value || picked.name) + ".");
+              } catch (addError) {
+                setStatus("Could not add the file: " + addError.message);
+              }
+            } })));
+
+          // Song File Hub
+          if (idForFile(key)) {
+            box.appendChild(el("div", { class: "gd-jukebox-row" },
+              el("button", { type: "button", text: ui.busy ? "Searching…" : "Search Song File Hub", onclick: async () => {
+                if (ui.busy) return;
+                ui.busy = true;
+                setStatus("Loading the Song File Hub index…");
+                try {
+                  const index = await loadSfhIndex();
+                  ui.results = index.get(Number(idForFile(key))) || [];
+                  setStatus(ui.results.length ? "" : "Song File Hub has no NONGs for this song ID.");
+                } catch (indexError) {
+                  setStatus("Could not load Song File Hub: " + indexError.message);
+                } finally {
+                  ui.busy = false;
+                  refresh();
+                }
+              } })));
+            if (ui.results && ui.results.length) {
+              const results = el("div", { class: "gd-jukebox-list" });
+              for (const result of ui.results) {
+                const have = songs.some((song) => song.sourceKey === result.key);
+                results.appendChild(el("div", { class: "gd-jukebox-song" },
+                  el("span", {}, result.name, el("small", { text: result.artist })),
+                  el("button", { type: "button", text: have ? "Downloaded" : "Download", disabled: have ? "" : null, onclick: async (event) => {
+                    event.target.disabled = true;
+                    setStatus("Downloading " + result.name + "…");
+                    try {
+                      const response = await fetch(result.url);
+                      if (!response.ok) throw new Error("HTTP " + response.status);
+                      await addSong(key, { name: result.name, artist: result.artist, source: "sfh", sourceKey: result.key }, await response.arrayBuffer());
+                      setStatus("Downloaded and selected " + result.name + ".");
+                    } catch (downloadError) {
+                      setStatus("Download failed: " + downloadError.message);
+                    }
+                  } }),
+                ));
+              }
+              box.appendChild(results);
+            }
+          }
+        }
+
+        const swapped = Object.keys(active);
+        if (swapped.length) {
+          box.appendChild(el("h4", { text: "Songs with a NONG selected" }));
+          const list = el("div", { class: "gd-jukebox-row" });
+          for (const file of swapped) {
+            list.appendChild(el("button", { type: "button", text: describe(file), onclick: () => {
+              ui.key = file;
+              ui.results = null;
+              refresh();
+            } }));
+          }
+          box.appendChild(list);
+        }
+        if (ui.status) box.appendChild(el("p", { class: "gd-jukebox-status", role: "status", text: ui.status }));
+        container.replaceChildren(box);
+      }
+
+      const mod = loader.registerMod({
+        id: "fleym.nongd",
+        name: "Jukebox",
+        developer: "Fleym & Flafy (web port)",
+        version: "web 1.0",
+        description:
+          "Replace any song with a NONG: pick an MP3 from your device or download one from Song File Hub. Your NONGs are kept in the browser and stay selected between visits.",
+        enabledByDefault: true,
+        settings: [{ type: "custom", render }],
+        onToggle: () => applyAll(),
+        setup(mod) {
+          // Remember the song the last opened level page asked about.
+          mod.hook("MusicDownloadManager::isSongDownloaded", (call) => {
+            const id = call.int(1);
+            if (id > 0) lastSongId = id;
+            if (songBytes.has(fileForId(id))) call.skip(1);
+          });
+        },
+      });
+
+      loader.beforeBoot(async () => {
+        await Promise.all(Object.keys(active).map(apply));
+      });
+      // Read the main level song list from the game once it is running.
+      loader.runOnGameThread((call) => {
+        for (let id = 0; id < 64; id++) {
+          const file = loader.mem.gdString(call.invoke("LevelTools::getAudioFileName", [{ bytes: new Uint8Array(32) }, id]).value),
+            title = loader.mem.gdString(call.invoke("LevelTools::getAudioTitle", [{ bytes: new Uint8Array(32) }, id]).value);
+          if (!file || mainSongs.some((song) => song.file === file)) continue;
+          mainSongs.push({ file, title: title || file });
+        }
+      }).catch((listError) => console.warn("[jukebox] could not read main songs", listError));
+    })();
+    // FPS & Visuals: frame rate unlock/cap, an FPS counter and picture
+    // options (anti-aliasing, colour adjustments, sharp scaling, no shake).
+    (function () {
+      const loader = GDModLoader,
+        canvas = document.getElementById("canvas"),
+        frameTimes = [];
+      let counter = null;
+
+      // Frame pacing: the game yields once per animation frame. With a target
+      // set, wait until that much time has passed (extra animation frames for
+      // caps below the refresh rate, quick message-channel yields above it).
+      loader.gluePatches.push(
+        {
+          name: "FPS unlock and cap",
+          find: "if(document.hidden){await new Promise(function(res){setTimeout(res,50)})}else if(target_ms>0&&target_ms<Module.gdRafInterval*.9){await new Promise(function(res){Module.gdFastQ.push(res);Module.gdFastPort.postMessage(0)})}else{await new Promise(function(res){requestAnimationFrame(function(){res()})})}",
+          replace:
+            "var gdTarget=Module.gdFrameTargetMs||target_ms,gdStart=Module.gdLastFrameEnd||0;if(document.hidden){await new Promise(function(res){setTimeout(res,50)})}else if(gdTarget>0&&gdTarget<Module.gdRafInterval*.9){do{await new Promise(function(res){Module.gdFastQ.push(res);Module.gdFastPort.postMessage(0)})}while(Module.gdFrameTargetMs&&performance.now()-gdStart<gdTarget)}else{do{await new Promise(function(res){requestAnimationFrame(function(){res()})})}while(Module.gdFrameTargetMs&&performance.now()-gdStart<gdTarget-Module.gdRafInterval*.5)}Module.gdLastFrameEnd=performance.now();",
+        },
+        {
+          name: "Anti-aliasing option",
+          find: "antialias:!!HEAP8[attributes+3>>>0]",
+          replace: "antialias:window.__gdAntialias===undefined?!!HEAP8[attributes+3>>>0]:window.__gdAntialias",
+        },
+      );
+
+      function targetFps(settings) {
+        return settings.fpsMode === "unlimited" ? 1e6 : settings.fpsMode === "custom" ? settings.fps : 0;
+      }
+
+      function applyVisuals() {
+        const settings = mod.settings,
+          on = mod.enabled;
+        canvas.style.filter = on
+          ? "brightness(" + settings.brightness + ") contrast(" + settings.contrast + ") saturate(" + settings.saturation + ")"
+          : "";
+        canvas.style.imageRendering = on && settings.sharpScaling ? "pixelated" : "";
+        if (window.Module) {
+          const fps = on ? targetFps(settings) : 0;
+          Module.gdFrameTargetMs = fps ? 1000 / fps : 0;
+        }
+      }
+
+      const mod = loader.registerMod({
+        id: "web.fps-visuals",
+        name: "FPS & Visuals",
+        developer: "webport",
+        version: "1.0",
+        description: "Unlock or cap the frame rate, show an FPS counter, and tune how the game looks.",
+        settings: [
+          { type: "title", name: "Frame rate" },
+          { id: "fpsMode", type: "choice", name: "Frame rate", default: "custom", options: [
+            { value: "game", name: "Match screen refresh rate" },
+            { value: "custom", name: "Custom" },
+            { value: "unlimited", name: "Unlimited" },
+          ] },
+          { id: "fps", type: "int", name: "Custom FPS", description: "Above your screen's refresh rate the game runs extra updates between screen refreshes (lower input delay, uses more CPU).", min: 15, max: 1000, step: 1, default: 240 },
+          { id: "showFps", type: "bool", name: "Show FPS counter", default: false },
+          { type: "title", name: "Visuals" },
+          { id: "antialias", type: "bool", name: "Anti-aliasing", description: "Smoother edges on rotated objects. Takes effect after reloading the page.", default: false },
+          { id: "brightness", type: "float", name: "Brightness", min: 0.5, max: 1.5, step: 0.01, default: 1 },
+          { id: "contrast", type: "float", name: "Contrast", min: 0.5, max: 1.5, step: 0.01, default: 1 },
+          { id: "saturation", type: "float", name: "Saturation", min: 0, max: 2, step: 0.01, default: 1 },
+          { id: "sharpScaling", type: "bool", name: "Sharp scaling", description: "Scale the picture without smoothing when the window isn't 1920×1080.", default: false },
+          { id: "noShake", type: "bool", name: "No camera shake", default: false },
+        ],
+        onToggle: applyVisuals,
+        onSettingChanged: applyVisuals,
+        setup(mod) {
+          mod.hook("GJBaseGameLayer::shakeCamera", (call) => {
+            if (mod.settings.noShake) call.skip();
+          });
+        },
+      });
+      if (mod.enabled) window.__gdAntialias = !!mod.settings.antialias;
+      applyVisuals();
+
+      loader.onFrame(() => frameTimes.push(performance.now()));
+      loader.beforeBoot(applyVisuals);
+
+      setInterval(() => {
+        const now = performance.now();
+        while (frameTimes.length && now - frameTimes[0] > 1000) frameTimes.shift();
+        const show = mod.enabled && mod.settings.showFps && window.__gdInputReady;
+        if (!counter && show) {
+          counter = document.createElement("div");
+          counter.id = "gd-fps-counter";
+          counter.setAttribute("aria-hidden", "true");
+          document.getElementById("gd-frame").appendChild(counter);
+        }
+        if (counter) {
+          counter.hidden = !show;
+          counter.textContent = frameTimes.length + " FPS";
+        }
+      }, 250);
+    })();
     </script>
 
     <!-- Main script: network shim, input handling, save restore, game loader. -->
@@ -2380,6 +3057,10 @@ self.onmessage = async ({ data: e }) => {
         hiddenSince = null,
         hiddenDateSince = null;
       window.__gdAutoPauseEnabled = false;
+      // Converts an event.timeStamp to the game's (pause-adjusted) clock.
+      window.__gdEventTime = function (eventTimeStamp) {
+        return eventTimeStamp - (realPerformanceNow() - performance.now());
+      };
       function adjustedPerformanceTime(realTime) {
         return (hiddenSince === null ? realTime : hiddenSince) - pausedTotal;
       }
@@ -3071,6 +3752,9 @@ self.onmessage = async ({ data: e }) => {
           }
           Module.FS.chdir("/Resources");
           await restoreSaves();
+          if (window.GDModLoader) {
+            await GDModLoader.runBeforeBoot();
+          }
           setLoadingProgress(98);
           Module._gd_autosave_set(0);
           window.__gdInputReady = true;

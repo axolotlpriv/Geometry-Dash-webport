@@ -64,8 +64,22 @@ The game can also be played on mobile phones. Performance, controls, and compati
 
 * **Pause button:** While you're in a level, a pause button appears in the top-right corner. It does the same thing as pressing `Esc`.
 * **Keybinds:** The keyboard button next to the pause button opens the keybinds menu. There you can add your own keys for jumping, moving, checkpoints and pausing. Your keybinds are kept in your browser.
-* **Saving:** Your progress is saved when you pause, when you switch tabs or close the page, and about once a minute while you're in the menus. Saves are stored in your browser (IndexedDB, with a backup copy in local storage). Downloaded songs are not kept between sessions.
-* **Geode mods:** Geode isn't supported. This port runs a version of the game that was converted to WebAssembly, and Geode and its mods only work with the native Windows, macOS and Android versions of the game.
+* **Saving:** Your progress is saved when you pause, when you switch tabs or close the page, and about once a minute while you're in the menus. Saves are stored in your browser (IndexedDB, with a backup copy in local storage). Songs the game downloads aren't kept between sessions, but NONGs you add with Jukebox are.
+
+## Mods
+
+The webport has its own mod loader with these mods built in. Open the mod list with the **Mods** button on the main menu, the puzzle button next to the pause button in levels, or the `Tab` key. Every mod can be turned on and off, and its settings are kept in your browser.
+
+| Mod | What it does |
+| --- | --- |
+| Eclipse Menu | Noclip, speedhack (with audio), show hitboxes, safe mode, respawn delay, no death effect, practice music hack, no mirror, no transitions, unlock all icons and colors, on-screen labels (FPS, CPS, attempts, percentage, noclip accuracy, clock) and toggle shortcuts. |
+| Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
+| Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
+| FPS & Visuals | Unlock or cap the frame rate, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
+
+Cheats like noclip and speedhack turn on safe mode automatically, so they can't save progress. You can change this in the Eclipse Menu settings.
+
+**Why not Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport. Mods that need their own servers, like Globed, aren't available.
 
 ## Troubleshooting
 
