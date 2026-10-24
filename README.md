@@ -76,12 +76,18 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 | Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
 | Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
 | FPS & Visuals | Unlock or cap the frame rate, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
-| Globed | Play online with friends: create a room, share its 6-digit ID, and see each other's icons, names and deaths in the same level. Death Link (set by the room owner) makes everyone die when anyone dies. |
+| Globed | Globed's multiplayer with Globed's own menus: the Globed button on the main menu, the Global Room, public and private rooms (passcodes, player limits, hidden rooms, invites, kicking), other players in the same level with their names, progress markers and a ping overlay, a player list in the pause menu, Death Link, and Globed's settings. See below. |
 | Mobile Controls | On phones and tablets: a text bar that opens the on-screen keyboard when you tap a text field in the game, left/right buttons in platformer levels, and landscape lock in fullscreen. |
+
+### Globed
+
+Press the **Globed** button (the globe next to the settings buttons) on the main menu and **Connect**. Everyone online starts in the Global Room; use **Create Room** or **Join Room** to play with friends, or share your room's ID (click the room name to copy it). When you're in the same level as someone in your room, you see their icon and name, and their progress under the progress bar. The room owner can turn on **Death Link** in the room settings: when anyone dies, everyone in the level dies.
+
+Globed's servers only accept the desktop mod, so the web port runs its own server: the first player to connect hosts it in their browser, and if they leave, someone else takes over automatically. This means you can only play with other people using the webport, and the other players (and whoever hosts the server) can see your IP address. Voice chat, emotes, teams, collision, 2-player mode, Switcheroo and follower rooms aren't available yet.
 
 Cheats like noclip and speedhack turn on safe mode automatically, so they can't save progress. You can change this in the Eclipse Menu settings.
 
-**Why not Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport. Globed's own servers only accept the real Globed mod, so the webport's Globed connects players directly to each other (peer to peer, through WebRTC). Everyone you play with needs to use the webport.
+**Why not Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport. Globed is rebuilt the same way (with Globed's own sprites), but it can't reach Globed's servers, as explained above.
 
 ## Troubleshooting
 
