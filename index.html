@@ -1622,6 +1622,11 @@ self.onmessage = async ({ data: e }) => {
           "cocos2d::CCSprite::createEmpty": 0x1008b5e0,
           "FMODLevelVisualizer::create": 0x69e7b0,
           "FMODLevelVisualizer::updateVisualizer": 0x69ecf0,
+          "PlayLayer::pauseGame": 0x7ba0e0,
+          "PlayLayer::resume": 0x7ba640,
+          "PlayLayer::resumeAndRestart": 0x7ba3c0,
+          "PlayLayer::togglePracticeMode": 0x7b9e50,
+          "LevelCell::loadFromLevel": 0x4ae050,
         };
       let instance = null,
         table = null,
@@ -4316,7 +4321,7 @@ self.onmessage = async ({ data: e }) => {
         isOwner: () => net.room.id !== 0 && net.room.owner === net.myId,
       };
       function emptyRoom() {
-        return { id: 0, name: "Global Room", owner: "", ownerName: "", passcode: 0, settings: defaultSettings(), players: [], playerCount: 0 };
+        return { id: 0, name: "Global Room", owner: "", ownerName: "", pinned: "", passcode: 0, settings: defaultSettings(), players: [], playerCount: 0 };
       }
       function setState(state, status = "") {
         net.state = state;
@@ -4522,6 +4527,7 @@ self.onmessage = async ({ data: e }) => {
               name: msg.name,
               owner: msg.owner,
               ownerName: msg.ownerName || "",
+              pinned: msg.pinned || "",
               passcode: msg.passcode || (msg.id === net.room.id ? net.room.passcode : 0),
               settings: sanitizeSettings(msg.settings),
               players: msg.players || [],
@@ -4636,6 +4642,7 @@ self.onmessage = async ({ data: e }) => {
             ownerName: owner ? playerInfo(owner).name : room.ownerName || "",
             settings: room.settings,
             passcode: session.id === room.owner ? room.passcode : 0,
+            pinned: room.pinned || "",
             players: members.slice(0, 250).map(playerInfo),
             playerCount: members.length,
           };
@@ -4859,7 +4866,18 @@ self.onmessage = async ({ data: e }) => {
               const level = String(msg.level || "");
               if (level !== session.level) {
                 session.level = level;
-                markDirty(roomOf(session));
+                const room = roomOf(session);
+                if (room.id && room.owner === session.id && level) {
+                  // Auto-pinning and follower rooms follow the owner's level.
+                  if (!room.settings.manualPinning) room.pinned = level;
+                  if (room.settings.isFollower) {
+                    for (const memberId of room.members) {
+                      const member = sessions.get(memberId);
+                      if (member && member !== session && member.level !== level) member.send({ t: "follow", level, name: playerInfo(session).name });
+                    }
+                  }
+                }
+                markDirty(room);
               }
               session.percent = Number(msg.percent) || 0;
               if (level) forwardToLevel(session, Object.assign({}, msg, { id: session.id }));
@@ -4974,6 +4992,9 @@ self.onmessage = async ({ data: e }) => {
         lastSend: 0,
         killingFromLink: false,
         deaths: [],
+        paused: false,
+        practice: false,
+        lastState: null,
         ui: null, // in-level nodes: ping label, progress container
       };
       // Players hidden from the pause menu's player list (by account ID or
@@ -5052,6 +5073,8 @@ self.onmessage = async ({ data: e }) => {
         }
         remote.level = msg.level;
         remote.percent = msg.percent;
+        remote.paused = !!msg.paused;
+        remote.practice = !!msg.practice;
         remote.lastSeen = performance.now();
         if (msg.level && msg.p1) {
           remote.states.push({ at: performance.now(), s: msg });
@@ -5201,6 +5224,61 @@ self.onmessage = async ({ data: e }) => {
           ui.opacity(visual.progress.icon, Math.round(settings.progressOpacity * 255));
         }
       }
+      // Globed's PlayerStatusIcons: paused, practicing and speaking icons
+      // above the player's name.
+      function updateStatusIcons(ui, visual, remote, data) {
+        const flags = {
+          paused: remote.paused,
+          practice: remote.practice,
+          speaking: !!(window.GlobedVoice && window.GlobedVoice.speaking(remote.id)),
+        };
+        const key = mod.settings.statusIcons && !visual.hidden ? JSON.stringify(flags) : "{}",
+          any = flags.paused || flags.practice || flags.speaking;
+        if (key !== visual.statusKey) {
+          visual.statusKey = key;
+          if (visual.status) ui.remove(visual.status);
+          visual.status = 0;
+          if (any && key !== "{}") {
+            const node = ui.node(),
+              icons = [];
+            if (flags.paused) icons.push(ui.frame("GJ_pauseBtn_clean_001.png"));
+            if (flags.practice) icons.push(ui.frame("checkpoint_01_001.png"));
+            if (flags.speaking) {
+              const speaker = ui.sprite("globed/speaker-icon.png");
+              if (speaker) icons.push(speaker);
+            }
+            let width = 20,
+              x = 10;
+            for (const icon of icons) {
+              ui.scale(icon, 24 / ui.getSize(icon)[1]);
+              width += ui.scaledSize(icon)[0];
+            }
+            width += 6.5 * (icons.length - 1);
+            const opacity = Math.round(mod.settings.playerOpacity * 255),
+              background = ui.scale9("square02_001.png", width * 3, 40 * 3);
+            ui.scale(background, 1 / 3);
+            ui.opacity(background, Math.round(opacity / 3));
+            ui.anchor(background, 0, 0);
+            ui.add(node, background, -1);
+            for (const icon of icons) {
+              const w = ui.scaledSize(icon)[0];
+              ui.opacity(icon, opacity);
+              ui.pos(icon, x + w / 2, 20);
+              ui.add(node, icon);
+              x += w + 6.5;
+            }
+            ui.size(node, width, 40);
+            ui.anchor(node, 0.5, 0);
+            ui.scale(node, 0.8);
+            ui.add(ui.parent(visual.player), node, 101);
+            visual.status = node;
+          }
+        }
+        if (visual.status) {
+          const nameShown = mod.settings.showNames && !visual.hidden;
+          ui.pos(visual.status, data.x, data.y + (nameShown ? NAME_OFFSET + 15 : NAME_OFFSET));
+        }
+      }
       function lerpAngle(a, b, t) {
         const d = ((b - a + 540) % 360) - 180;
         return a + d * t;
@@ -5234,6 +5312,7 @@ self.onmessage = async ({ data: e }) => {
             ui.remove(visual.player);
             ui.remove(visual.name.node);
             if (visual.progress) ui.remove(visual.progress.node);
+            if (visual.status) ui.remove(visual.status);
           } catch (removeError) {
             // the level may already be gone
           }
@@ -5271,7 +5350,10 @@ self.onmessage = async ({ data: e }) => {
           ui.pos(p, data.x, data.y);
           ui.rotation(p, data.r);
           ui.pos(visual.name.node, data.x, data.y + NAME_OFFSET);
-          ui.visible(p, !(data.dead && visual.dead) && !visual.hidden);
+          const practiceHidden = remote.practice && mod.settings.hidePracticing;
+          ui.visible(p, !(data.dead && visual.dead) && !visual.hidden && !practiceHidden);
+          ui.visible(visual.name.node, mod.settings.showNames && !visual.hidden && !practiceHidden);
+          updateStatusIcons(ui, visual, remote, data);
           if (visual.progress && local.ui.progressWidth) {
             const progress = Math.max(0, Math.min(1, (remote.percent || 0) / 100));
             ui.pos(visual.progress.node, (local.ui.progressWidth - 2) * progress, 0);
@@ -5359,6 +5441,8 @@ self.onmessage = async ({ data: e }) => {
           { id: "showNames", type: "bool", name: "Player Names", description: "Shows player names above their icons.", default: true },
           { id: "nameOpacity", type: "float", name: "Name Opacity", description: "Sets the opacity of other players' names in levels.", min: 0, max: 1, step: 0.05, default: 1 },
           { id: "deathEffects", type: "bool", name: "Death Effects", description: "Plays other players' death effects when they die in levels.", default: true },
+          { id: "hidePracticing", type: "bool", name: "Hide Practicing Players", description: "Hide players that are in practice mode.", default: false },
+          { id: "statusIcons", type: "bool", name: "Show Status Icons", description: "Show icons indicating player states, such as paused, practicing or voice chatting.", default: true },
           { id: "quickChat", type: "bool", name: "Emotes", description: "Enables the use of emotes (quick chat) in levels. They can be accessed via the pause menu and then bound to keys below.", default: true },
           { id: "quickChatSfx", type: "bool", name: "Emote Sound Effects", description: "Plays sound effects when you or other players use certain emotes in levels.", default: true },
           { id: "quickChatSfxVolume", type: "float", name: "Emote SFX Volume", description: "Sets the volume of sound effects played when certain emotes are used in levels.", min: 0, max: 1, step: 0.05, default: 0.5 },
@@ -5395,13 +5479,39 @@ self.onmessage = async ({ data: e }) => {
         },
         setup(mod) {
           mod.hook("PlayLayer::init", (call) => {
+            local.paused = false;
+            local.practice = false;
             clearVisuals();
             pendingRemovals.length = 0;
             local.layer = call.arg(0);
             local.level = "";
             local.ui = null;
           });
+          // Paused and practice flags for other players' status icons.
+          const setPaused = (paused) => {
+            if (local.paused === paused) return;
+            local.paused = paused;
+            if (net.state === "connected" && local.lastState) net.send(Object.assign({}, local.lastState, { paused }));
+          };
+          mod.hook("PlayLayer::pauseGame", (call) => {
+            call.callOriginal();
+            setPaused(true);
+          });
+          mod.hook("PlayLayer::resume", (call) => {
+            call.callOriginal();
+            setPaused(false);
+          });
+          mod.hook("PlayLayer::resumeAndRestart", (call) => {
+            call.callOriginal();
+            setPaused(false);
+          });
+          mod.hook("PlayLayer::togglePracticeMode", (call) => {
+            local.practice = !!(call.arg(1) & 255);
+          });
           mod.hook("PlayLayer::onQuit", () => {
+            local.paused = false;
+            local.practice = false;
+            local.lastState = null;
             visuals.clear();
             pendingRemovals.length = 0;
             local.layer = 0;
@@ -5447,12 +5557,15 @@ self.onmessage = async ({ data: e }) => {
             const now = performance.now();
             if (now - local.lastSend >= SEND_INTERVAL) {
               local.lastSend = now;
-              net.send({
+              local.lastState = {
                 t: "state",
                 level: local.level,
                 percent: call.invoke("PlayLayer::getCurrentPercent", [layer]).f32,
                 p1: readPlayer(call, mem.ptr(layer + OFF.player1)),
-              });
+                paused: false,
+                practice: local.practice,
+              };
+              net.send(local.lastState);
             }
             // Deaths from other players: their death effect, and Death Link.
             while (pendingDeaths.length) {
@@ -6268,16 +6381,14 @@ self.onmessage = async ({ data: e }) => {
             const rank = (p) => (p.id === room.owner ? 0 : p.id === net.myId ? 1 : 2);
             return rank(a) - rank(b) || a.name.toLowerCase().localeCompare(b.name.toLowerCase());
           });
-          const key = JSON.stringify([players, room.owner, net.myId, net.isOwner()]);
+          const key = JSON.stringify([players, room.owner, room.pinned, net.myId, net.isOwner()]);
           if (!force && key === s.playersKey) return;
           s.playersKey = key;
           const [lw] = s.listSize;
           loader.cocosForgetTree(ui.call, s.list.scroll.content);
-          s.list.setCells(
-            ui,
-            players.map((player) => (k, cell, width, height) => playerCell(k, cell, width, height, player)),
-            27,
-          );
+          const cells = players.map((player) => (k, cell, width, height) => playerCell(k, cell, width, height, player));
+          if (room.id && room.pinned) cells.unshift((k, cell, width, height) => pinnedLevelCell(k, cell, width, height, room.pinned));
+          s.list.setCells(ui, cells, 27);
           s.touchFix = true;
         },
         frame(ui) {
@@ -6355,6 +6466,40 @@ self.onmessage = async ({ data: e }) => {
           ui.add(menu, button);
         });
       }
+      // Globed's PinnedLevelCell: the room's pinned level with a play button.
+      function pinnedLevelCell(ui, cell, width, height, key) {
+        cellGradient(ui, cell, width, height, [0, 255, 100, 90]);
+        const pin = ui.label("Pinned:", "goldFont.fnt", 0.45);
+        ui.anchor(pin, 0, 0.5);
+        ui.pos(pin, 8, height / 2);
+        ui.add(cell, pin);
+        const name = ui.label(levelName(key), "bigFont.fnt");
+        ui.limitWidth(name, width - 140, 0.5, 0.1);
+        ui.anchor(name, 0, 0.5);
+        ui.pos(name, 8 + ui.scaledSize(pin)[0] + 5, height / 2);
+        ui.add(cell, name);
+        const menu = ui.menu(),
+          play = ui.frame("GJ_playBtn2_001.png");
+        ui.fit(play, 22, 22);
+        const button = ui.button(play, (k) => playLevel(k, key));
+        ui.pos(button, width - 5 - 11, height / 2);
+        ui.add(menu, button);
+        ui.add(cell, menu);
+      }
+      // Follower rooms: the owner joined a level, follow them?
+      net.on("follow", (msg) => {
+        pending.push((ui) => {
+          if (window.GlobedWeb.local.level === msg.level) return;
+          ui.confirm("Follow", msg.name + " started playing " + levelName(msg.level) + ". Follow them?", "No", "Follow", (k, yes) => {
+            if (!yes) return;
+            if (window.GlobedWeb.isInLevel()) {
+              k.alert("Follow", "Leave the level you're playing first, then open " + levelName(msg.level) + " from the pinned level in the Globed menu.");
+              return;
+            }
+            playLevel(k, msg.level);
+          });
+        });
+      });
       const MAIN_LEVELS = ["", "Stereo Madness", "Back on Track", "Polargeist", "Dry Out", "Base After Base", "Cant Let Go", "Jumper", "Time Machine", "Cycles", "xStep", "Clutterfunk", "Theory of Everything", "Electroman Adventures", "Clubstep", "Electrodynamix", "Hexagon Force", "Blast Processing", "Theory of Everything 2", "Geometrical Dominator", "Deadlocked", "Fingerdash", "Dash"];
       function levelName(key) {
         const id = Number(key);
@@ -6516,8 +6661,8 @@ self.onmessage = async ({ data: e }) => {
         ["hidden", "Hidden Room", "While enabled, the room can not be found on the public room listing and can only be joined by entering the room ID.", "room"],
         ["privateInvites", "Closed Invites", "While enabled, only the room owner can invite other players to the room.", "room"],
         ["teams", "Teams", "Enables ability to create and join <cj>Teams</c>. In deathlink, <cy>deaths will only impact your teammates</c>. Otherwise, it only makes a visual difference.", "room", true],
-        ["manualPinning", "Auto-pinning", "When enabled, any levels the <cg>room owner</c> plays will be automatically pinned and easy to join for other players.", "room", true],
-        ["isFollower", "Follower Room", "Whenever the <cg>room owner</c> joins any level, other players will be prompted to <cy>follow</c> them to the same level.", "room", true],
+        ["manualPinning", "Auto-pinning", "When enabled, any levels the <cg>room owner</c> plays will be automatically pinned and easy to join for other players.", "room", false, [], true],
+        ["isFollower", "Follower Room", "Whenever the <cg>room owner</c> joins any level, other players will be prompted to <cy>follow</c> them to the same level.", "room", false],
         ["collision", "Collision", "While enabled, players can collide with each other.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", true, ["twoPlayerMode", "switcheroo"]],
         ["twoPlayerMode", "2-Player Mode", "While enabled, players can link with another player to play a 2-player enabled level together.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", true, ["collision", "deathlink", "switcheroo"]],
         ["deathlink", "Death Link", "Whenever a player dies, everyone on the level dies as well. <cy>Inspired by the mod DeathLink from</c> <cg>Alphalaneous</c>.", "game", false, ["twoPlayerMode", "switcheroo"]],
@@ -6544,8 +6689,8 @@ self.onmessage = async ({ data: e }) => {
         ui.pos(dotButton, ...popup.at(width - 16, height - 16));
         ui.add(popup.menu, dotButton);
         const columns = { room: { x: 78, title: "Room Options", rows: [] }, game: { x: width - 78, title: "Gameplay Mods", rows: [] } };
-        for (const [key, name, description, kind, unavailable, incompatible] of ROOM_SETTINGS) {
-          columns[kind].rows.push({ key, name, description, unavailable, incompatible });
+        for (const [key, name, description, kind, unavailable, incompatible, invert] of ROOM_SETTINGS) {
+          columns[kind].rows.push({ key, name, description, unavailable, incompatible, invert });
         }
         for (const columnInfo of Object.values(columns)) {
           const top = height / 2 - 10 + 62;
@@ -6562,7 +6707,8 @@ self.onmessage = async ({ data: e }) => {
           columnInfo.rows.forEach((setting, i) => {
             const y = top - 14 - 12 - i * 24,
               left = columnInfo.x - 62;
-            const toggler = ui.toggler(!!value[setting.key], (k, on) => {
+            const shown = (key) => (ROOM_SETTINGS.find((row) => row[0] === key)[6] ? !value[key] : !!value[key]);
+            const toggler = ui.toggler(shown(setting.key), (k, on) => {
               if (setting.unavailable) {
                 pending.push((k2) => {
                   k2.setToggled(toggler, false);
@@ -6570,10 +6716,10 @@ self.onmessage = async ({ data: e }) => {
                 });
                 return;
               }
-              value = Object.assign({}, value, { [setting.key]: on });
+              value = Object.assign({}, value, { [setting.key]: setting.invert ? !on : on });
               for (const other of setting.incompatible || []) value[other] = false;
               pending.push((k2) => {
-                for (const [key, item] of togglers) k2.setToggled(item, !!value[key]);
+                for (const [key, item] of togglers) k2.setToggled(item, shown(key));
                 k2.color(dot, needsSafeMode() ? [255, 165, 0] : [0, 255, 0]);
               });
               onChange(value);
@@ -6828,10 +6974,10 @@ self.onmessage = async ({ data: e }) => {
         // Like GD, the level replaces the current scene.
         const s = GlobedMenu.state;
         GlobedMenu.state = null;
-        loader.cocosForgetTree(ui.call, s.layer);
+        if (s) loader.cocosForgetTree(ui.call, s.layer);
         const scene = ui.ptr("PlayLayer::scene", [level, 0, 0]);
         ui.inv("cocos2d::CCDirector::replaceScene", [ui.director(), ui.ptr("cocos2d::CCTransitionFade::create", [{ f32: 0.5 }, scene])]);
-        ui.release(s.layer);
+        if (s) ui.release(s.layer);
       }
 
       function rulesPopup(ui) {
@@ -6913,6 +7059,62 @@ self.onmessage = async ({ data: e }) => {
         ui.add(popup.menu, open);
         ui.showPopup(popup);
       }
+
+      // ------------------------------------------- level list player counts
+      // Globed shows how many players (in your room) are on each level in
+      // the online level lists.
+      const levelCells = new Map(); // LevelCell -> { key, label, icon }
+      let countsRequest = 0,
+        countsRefresh = 0;
+      loader.hook("LevelCell::loadFromLevel", (call) => {
+        const cell = call.arg(0),
+          level = call.arg(1);
+        call.callOriginal();
+        if (!mod() || !mod().enabled || net.state !== "connected" || !level) return;
+        const ui = loader.cocos(call),
+          key = mem.cString(ui.ptr("GJGameLevel::getCoinKey", [level, 1])).replace(/_1$/, ""),
+          [width, height] = ui.getSize(cell),
+          normal = Math.abs(height - 90) < 10,
+          x = width - (normal ? 12 : 9),
+          y = normal ? 67 : 6.5;
+        let entry = levelCells.get(cell);
+        if (!entry) {
+          const label = ui.label("", "goldFont.fnt", 0.4),
+            icon = sprite(ui, "icon-person");
+          ui.scale(icon, normal ? 0.4 : 0.3);
+          ui.anchor(icon, 1, 0.5);
+          ui.pos(icon, x, y);
+          ui.anchor(label, 1, 0.5);
+          ui.pos(label, x - 13, y);
+          ui.visible(label, false);
+          ui.visible(icon, false);
+          ui.add(cell, label, 10);
+          ui.add(cell, icon, 10);
+          ui.retain(cell);
+          entry = { label, icon };
+          levelCells.set(cell, entry);
+        }
+        entry.key = key;
+        clearTimeout(countsRequest);
+        countsRequest = setTimeout(() => net.send({ t: "requestLevelCounts" }), 150);
+      });
+      net.on("levelCounts", (msg) => {
+        pending.push((ui) => {
+          for (const [cell, entry] of levelCells) {
+            if (!ui.parent(cell)) {
+              ui.release(cell);
+              levelCells.delete(cell);
+              continue;
+            }
+            const count = msg.counts[entry.key] || 0;
+            ui.setText(entry.label, String(count));
+            ui.visible(entry.label, count > 0);
+            ui.visible(entry.icon, count > 0);
+          }
+          clearTimeout(countsRefresh);
+          if (levelCells.size) countsRefresh = setTimeout(() => net.state === "connected" && net.send({ t: "requestLevelCounts" }), 5000);
+        });
+      });
 
       // ------------------------------------------------------ pause menu
       // Globed adds a player list button to the pause menu.
@@ -7032,7 +7234,7 @@ self.onmessage = async ({ data: e }) => {
       // Globed's SettingsLayer: tabs of settings over a brown list.
       const TABS = [
         ["Globed", ["General", ["autoconnect", "invitesFrom", "streamerMode"]]],
-        ["Players", ["Players", ["playerOpacity", "quickChat", "quickChatSfx", "quickChatSfxVolume", "emoteOpacity", "showNames", "nameOpacity", "deathEffects"]]],
+        ["Players", ["Players", ["playerOpacity", "quickChat", "quickChatSfx", "quickChatSfxVolume", "emoteOpacity", "showNames", "nameOpacity", "hidePracticing", "statusIcons", "deathEffects"]]],
         ["Level UI", ["Level UI", ["progressIndicators", "progressOpacity"]], ["Voice Chat Overlay", ["voiceOverlay", "voiceOverlayThreshold"]], ["Ping overlay", ["overlayEnabled", "overlayOpacity", "overlayPosition", "overlayAlwaysShow"]]],
         ["Voice", ["Audio", ["voiceChat", "playbackVolume", "voiceProximity", "classicProximity", "deafenNotification", "voiceLoopback"]]],
         ["Menus", ["Menus", []]],
