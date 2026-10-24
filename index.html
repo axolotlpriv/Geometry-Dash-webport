@@ -1627,6 +1627,9 @@ self.onmessage = async ({ data: e }) => {
           "PlayLayer::resumeAndRestart": 0x7ba3c0,
           "PlayLayer::togglePracticeMode": 0x7b9e50,
           "LevelCell::loadFromLevel": 0x4ae050,
+          "GJBaseGameLayer::checkCollisions": 0x6137f0,
+          "GJBaseGameLayer::handleButton": 0x6338e0,
+          "PlayerObject::collidedWithObject": 0x7919b0,
         };
       let instance = null,
         table = null,
@@ -4709,10 +4712,10 @@ self.onmessage = async ({ data: e }) => {
             if (!rooms.has(id)) return id;
           }
         }
-        function forwardToLevel(session, msg) {
+        function forwardToLevel(session, msg, includeSelf = false) {
           const room = roomOf(session);
           for (const memberId of room.members) {
-            if (memberId === session.id) continue;
+            if (memberId === session.id && !includeSelf) continue;
             const other = sessions.get(memberId);
             if (other && other.level && other.level === session.level) other.send(msg);
           }
@@ -4890,6 +4893,16 @@ self.onmessage = async ({ data: e }) => {
               }
               session.percent = Number(msg.percent) || 0;
               if (level) forwardToLevel(session, Object.assign({}, msg, { id: session.id }));
+              break;
+            }
+            case "aps":
+              // Switcheroo events go to everyone in the level, including the sender.
+              if (session.level) forwardToLevel(session, Object.assign({}, msg, { id: session.id }), true);
+              break;
+            case "direct": {
+              // A message for one player in the same room (2-player links).
+              const target = sessions.get(msg.to);
+              if (target && target.roomId === session.roomId && target !== session) target.send({ t: "direct", from: session.id, data: msg.data });
               break;
             }
             case "death":
@@ -5109,6 +5122,7 @@ self.onmessage = async ({ data: e }) => {
         }
         remote.level = msg.level;
         remote.percent = msg.percent;
+        remote.slot = msg.slot === 2 ? 2 : 1;
         remote.paused = !!msg.paused;
         remote.practice = !!msg.practice;
         remote.lastSeen = performance.now();
@@ -5175,6 +5189,8 @@ self.onmessage = async ({ data: e }) => {
           left: mem.u8(player + OFF.isGoingLeft),
           mini: mem.f32(player + OFF.vehicleSize) !== 1 ? 1 : 0,
           dead: mem.u8(player + OFF.isDead),
+          yv: mem.f64(player + 0x9a0),
+          og: mem.u8(player + OFF.isOnGround),
         };
       }
 
@@ -5326,7 +5342,7 @@ self.onmessage = async ({ data: e }) => {
         const d = ((b - a + 540) % 360) - 180;
         return a + d * t;
       }
-      function sample(remote) {
+      function sample(remote, slot = remote.slot || 1) {
         // Interpolate between the two states around (now - delay).
         const states = remote.states,
           target = performance.now() - INTERP_DELAY;
@@ -5342,9 +5358,10 @@ self.onmessage = async ({ data: e }) => {
         }
         const span = newer.at - older.at,
           t = span > 0 ? Math.min(1, Math.max(0, (target - older.at) / span)) : 1,
-          a = older.s.p1,
-          b = newer.s.p1;
-        if (!a || !b) return newer.s.p1 || null;
+          key = slot === 2 ? "p2" : "p1",
+          a = older.s[key] || older.s.p1,
+          b = newer.s[key] || newer.s.p1;
+        if (!a || !b) return b || null;
         return Object.assign({}, b, { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, r: lerpAngle(a.r, b.r, t) });
       }
       function updateVisuals(call) {
@@ -5393,7 +5410,7 @@ self.onmessage = async ({ data: e }) => {
           ui.pos(p, data.x, data.y);
           ui.rotation(p, data.r);
           ui.pos(visual.name.node, data.x, data.y + NAME_OFFSET);
-          const practiceHidden = remote.practice && mod.settings.hidePracticing;
+          const practiceHidden = (remote.practice && mod.settings.hidePracticing) || (window.GlobedModes && window.GlobedModes.hides(remote.id));
           ui.visible(p, !(data.dead && visual.dead) && !visual.hidden && !practiceHidden);
           ui.visible(visual.name.node, mod.settings.showNames && !visual.hidden && !practiceHidden);
           updateStatusIcons(ui, visual, remote, data);
@@ -5501,6 +5518,7 @@ self.onmessage = async ({ data: e }) => {
           { id: "voiceOverlayThreshold", type: "float", name: "Volume Threshold", description: "Adjust how loud players have to be speaking to be shown on the voice overlay.", min: 0, max: 1, step: 0.01, default: 0.05 },
           { id: "keyVoice", type: "key", name: "Voice chat key", default: "KeyV" },
           { id: "keyDeafen", type: "key", name: "Deafen key", default: "KeyB" },
+          { id: "keyForceSwitch", type: "key", name: "Force switch (Switcheroo)", description: "The room owner can press this to switch players right away.", default: "" },
           { type: "title", name: "Emote keys (favorite emotes 1-8)" },
           ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ id: "emoteKey" + i, type: "key", name: "Favorite emote " + i, default: "" })),
           { type: "title", name: "Level UI" },
@@ -5605,6 +5623,8 @@ self.onmessage = async ({ data: e }) => {
                 level: local.level,
                 percent: call.invoke("PlayLayer::getCurrentPercent", [layer]).f32,
                 p1: readPlayer(call, mem.ptr(layer + OFF.player1)),
+                p2: window.GlobedModes && window.GlobedModes.needsP2() ? readPlayer(call, mem.ptr(layer + OFF.player2)) : undefined,
+                slot: window.GlobedModes ? window.GlobedModes.slot() : 1,
                 paused: false,
                 practice: local.practice,
               };
@@ -5623,7 +5643,8 @@ self.onmessage = async ({ data: e }) => {
               const me = playerInfo(net.myId),
                 them = playerInfo(death.id),
                 sameTeam = !net.room.settings.teams || !me || !them || me.team === them.team;
-              if (net.room.settings.deathlink && death.real && sameTeam) {
+              const modeKill = window.GlobedModes && window.GlobedModes.killsOnDeath(death);
+              if (((net.room.settings.deathlink && sameTeam) || modeKill) && death.real) {
                 const p1 = mem.ptr(layer + OFF.player1);
                 if (!mem.u8(p1 + OFF.isDead)) {
                   local.killingFromLink = true;
@@ -5658,6 +5679,12 @@ self.onmessage = async ({ data: e }) => {
         profile,
         refreshProfile,
         visualCount: () => visuals.size,
+        OFF,
+        remote: (id) => remotes.get(id),
+        sample,
+        playerInfo,
+        // Remote players with a visual in this level.
+        visualList: () => [...visuals.entries()].map(([id, v]) => ({ id, player: v.player, mini: v.mini, dead: v.dead, hidden: v.hidden, remote: remotes.get(id) })),
         // Other players in the same level (for the pause menu's player list).
         levelPlayers() {
           const out = [];
@@ -5734,6 +5761,9 @@ self.onmessage = async ({ data: e }) => {
           "icon-show-player": "menu/icon-show-player.png",
           "icon-players": "game/icon-players.png",
           "icon-emotes": "game/icon-emotes.png",
+          "icon-switcheroo": "game/icon-switcheroo.png",
+          "switch-screen-glow": "game/switch-screen-glow.png",
+          "switch-screen-preglow": "game/switch-screen-preglow.png",
           "emote-btn-back": "game/emote-btn-back.png",
           "speaker-icon": "game/speaker-icon.png",
           "bubble_emote_spr": "emotes_sprites/bubble_emote_spr.png",
@@ -6797,10 +6827,10 @@ self.onmessage = async ({ data: e }) => {
         ["teams", "Teams", "Enables ability to create and join <cj>Teams</c>. In deathlink, <cy>deaths will only impact your teammates</c>. Otherwise, it only makes a visual difference.", "room", false],
         ["manualPinning", "Auto-pinning", "When enabled, any levels the <cg>room owner</c> plays will be automatically pinned and easy to join for other players.", "room", false, [], true],
         ["isFollower", "Follower Room", "Whenever the <cg>room owner</c> joins any level, other players will be prompted to <cy>follow</c> them to the same level.", "room", false],
-        ["collision", "Collision", "While enabled, players can collide with each other.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", true, ["twoPlayerMode", "switcheroo"]],
-        ["twoPlayerMode", "2-Player Mode", "While enabled, players can link with another player to play a 2-player enabled level together.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", true, ["collision", "deathlink", "switcheroo"]],
+        ["collision", "Collision", "While enabled, players can collide with each other.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", false, ["twoPlayerMode", "switcheroo"]],
+        ["twoPlayerMode", "2-Player Mode", "While enabled, players can link with another player to play a 2-player enabled level together.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", false, ["collision", "deathlink", "switcheroo"]],
         ["deathlink", "Death Link", "Whenever a player dies, everyone on the level dies as well. <cy>Inspired by the mod DeathLink from</c> <cg>Alphalaneous</c>.", "game", false, ["twoPlayerMode", "switcheroo"]],
-        ["switcheroo", "Switcheroo", "Players take turns playing the level one at a time, in a random order and at random intervals.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", true, ["collision", "twoPlayerMode", "deathlink"]],
+        ["switcheroo", "Switcheroo", "Players take turns playing the level one at a time, in a random order and at random intervals.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", false, ["collision", "twoPlayerMode", "deathlink"]],
       ];
       function roomSettingsPopup(ui, current, canModify, onChange) {
         const width = 310,
@@ -7268,6 +7298,7 @@ self.onmessage = async ({ data: e }) => {
           ui.scale(emotes, 0.9);
           buttons.push(ui.button(emotes, (k) => window.GlobedEmotes.openList(k)));
         }
+        if (window.GlobedModes) buttons.push(...window.GlobedModes.pauseButtons(ui));
         columnUp(ui, buttons, w - 52, 24, 0);
         buttons.forEach((item) => ui.add(menu, item));
         ui.add(layer, menu, 10);
@@ -7309,6 +7340,7 @@ self.onmessage = async ({ data: e }) => {
                 k2.pos(percent, 8 + h * 0.7 + 7 + k2.scaledSize(name)[0] + 6, h / 2);
                 k2.add(cell, percent);
               }
+              if (!player.self && window.GlobedModes) window.GlobedModes.addLinkButton(k2, cell, w, h, player, popup);
               if (!player.self) {
                 const hideOn = sprite(k2, "icon-hide-player"),
                   hideOff = sprite(k2, "icon-show-player");
@@ -7570,6 +7602,7 @@ self.onmessage = async ({ data: e }) => {
         isLoaded: (name) => loaded.has(name),
         listNode,
         playerIcon,
+        sprite,
         queue: (task) => pending.push(task),
         open: () => loader.runOnGameThread((call) => openGlobed(loader.cocos(call))),
         menu: GlobedMenu,
@@ -8210,6 +8243,561 @@ self.onmessage = async ({ data: e }) => {
           const entry = voice.calls.get(id);
           return !!entry && entry.loudness >= (settings().voiceOverlayThreshold ?? 0.05);
         },
+      };
+    })();
+    // Globed's room game modes for the web port: Collision (players bump into
+    // each other), 2-Player Mode (link with another player to play a
+    // 2-player level together) and Switcheroo (players take turns playing
+    // the same run). All three force safe mode, like Globed does.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        net = window.GlobedNet,
+        // PlayerObject fields (Windows 2.2081).
+        POS = 0xa90, // m_position
+        YVEL = 0x9a0, // m_yVelocity
+        ON_GROUND = 0x9c1,
+        VEHICLE_SIZE = 0x9f0;
+      const G = () => window.GlobedWeb;
+      const roomOn = (key) => net.state === "connected" && !!net.room.id && !!net.room.settings[key];
+      const inLevel = () => !!G() && G().isInLevel();
+      const sleepless = (fn) => {
+        try {
+          fn();
+        } catch (modeError) {
+          console.warn("[globed] mode error", modeError);
+        }
+      };
+
+      // ------------------------------------------------------- safe mode
+      // These modes never save progress or rewards.
+      const forcedSafe = () => inLevel() && (roomOn("collision") || roomOn("twoPlayerMode") || roomOn("switcheroo"));
+      function installHooks() {
+        const mod = G().mod;
+        for (const name of [
+          "GJGameLevel::savePercentage",
+          "GameStatsManager::completedLevel",
+          "GameStatsManager::awardCurrencyForLevel",
+          "GameStatsManager::awardDiamondsForLevel",
+          "GameStatsManager::completedDailyLevel",
+          "GameStatsManager::completedMapPack",
+          "GameStatsManager::storeUserCoin",
+          "GameStatsManager::storeSecretCoin",
+          "GameStatsManager::setStarsForMapPack",
+          "GameStatsManager::awardSecretKey",
+        ]) {
+          mod.hook(name, (call) => {
+            if (forcedSafe()) call.skip(0);
+          });
+        }
+        mod.hook("GJBaseGameLayer::checkCollisions", (call) => {
+          const layer = call.arg(0);
+          call.callOriginal();
+          if (layer === G().levelLayer() && roomOn("collision")) sleepless(() => collide(call, layer, call.arg(1), call.float(2)));
+        });
+        mod.hook("GJBaseGameLayer::handleButton", (call) => {
+          if (blocksInput() && !G().local.ignoreButtonBlock) call.skip(0);
+        });
+        mod.hook("PlayLayer::destroyPlayer", (call) => {
+          const layer = call.arg(0),
+            player = call.arg(1),
+            object = call.arg(2);
+          if (layer !== G().levelLayer() || G().local.killingFromLink) return;
+          const fields = loader.getGameLayerFields(layer),
+            anticheat = fields && object && object === mem.ptr(layer + fields.anticheatSpike);
+          if (anticheat) return;
+          const p1 = mem.ptr(layer + G().OFF.player1),
+            p2 = mem.ptr(layer + G().OFF.player2);
+          // Inactive players in Switcheroo and the other half of a link
+          // can't die from touching things.
+          if (switcherooInactive() && (player === p1 || player === p2)) call.skip(0);
+          else if (tp.linked && player === mirrorFor(p1, p2)) call.skip(0);
+        });
+        mod.hook("PlayLayer::onQuit", () => {
+          aps.hidLocal = false;
+          for (const key of ["glow", "preglow"]) aps[key] = 0;
+          aps.effects = null;
+          // The game keeps running after Switcheroo's level ends only in the menu.
+          aps.gameActive = false;
+          aps.active = "";
+        });
+        mod.hook("GJBaseGameLayer::update", (call) => {
+          const layer = call.arg(0);
+          if (layer !== G().levelLayer()) return;
+          call.callOriginal();
+          sleepless(() => frame(call, layer));
+        });
+      }
+
+      const stats = { collisions: 0 };
+      // -------------------------------------------------------- collision
+      // Players are solid blocks for each other: when the local player
+      // overlaps another player, the game's own block collision runs, and
+      // sideways pushes are undone like in Globed.
+      function collide(call, layer, player, dt) {
+        const ui = loader.cocos(call),
+          [mx, my] = ui.getPos(player),
+          mySize = mem.f32(player + VEHICLE_SIZE) !== 1 ? 18 : 30;
+        for (const visual of G().visualList()) {
+          if (visual.hidden || visual.dead || (aps.gameActive && visual.id !== aps.active)) continue;
+          const [rx, ry] = ui.getPos(visual.player),
+            size = visual.mini ? 18 : 30,
+            reach = (mySize + size) / 2;
+          if (Math.abs(mx - rx) >= reach || Math.abs(my - ry) >= reach) continue;
+          const rect = new Uint8Array(new Float32Array([rx - size / 2, ry - size / 2, size, size]).buffer);
+          stats.collisions++;
+          call.invoke("PlayerObject::collidedWithObject", [player, { f32: dt }, visual.player, { bytes: rect }, 0]);
+          const [nx, ny] = ui.getPos(player);
+          if (Math.abs(nx - mx) > 10) setPos(ui, player, mx, ny);
+        }
+      }
+      function setPos(ui, player, x, y) {
+        ui.pos(player, x, y);
+        mem.setF32(player + POS, x);
+        mem.setF32(player + POS + 4, y);
+      }
+
+      // -------------------------------------------------------- 2 players
+      const tp = { linked: "", isP2: false, attempt: "", linkedName: "" };
+      const mirrorFor = (p1, p2) => (tp.isP2 ? p1 : p2);
+      // Which of my two players I control.
+      const slot = () => (tp.linked && roomOn("twoPlayerMode") && tp.isP2 ? 2 : 1);
+      function unlink(silent = false) {
+        if (!tp.linked) return;
+        if (!silent) net.send({ t: "direct", to: tp.linked, data: { kind: "unlink" } });
+        tp.linked = "";
+        tp.attempt = "";
+        // The hidden mirror player comes back as a normal player.
+        tp.restore = true;
+      }
+      net.on("direct", (msg) => {
+        const data = msg.data || {};
+        if (!roomOn("twoPlayerMode")) return;
+        if (data.kind === "unlink") {
+          if (tp.linked === msg.from) unlink(true);
+          else if (tp.attempt === msg.from) tp.attempt = "";
+          if (tp.attempt === "" && !tp.linked) window.GlobedUI.queue((ui) => ui.toast("The link request was declined"));
+        } else if (data.kind === "request") {
+          if (tp.linked) {
+            if (tp.linked !== msg.from) net.send({ t: "direct", to: msg.from, data: { kind: "unlink" } });
+            return;
+          }
+          if (tp.attempt === msg.from) {
+            // They answered our request: linked!
+            linkSuccess(msg.from, !!data.youAreP2);
+            return;
+          }
+          const info = G().playerInfo(msg.from),
+            name = info ? info.name : "Someone";
+          window.GlobedUI.queue((ui) =>
+            ui.confirm(
+              "Note",
+              name + " wants to link with you. You will be playing as the " + (data.youAreP2 ? "second" : "first") + " player. Agree to link?",
+              "Cancel",
+              "Agree",
+              (k, yes) => {
+                if (!yes) {
+                  net.send({ t: "direct", to: msg.from, data: { kind: "unlink" } });
+                  return;
+                }
+                net.send({ t: "direct", to: msg.from, data: { kind: "request", youAreP2: !data.youAreP2 } });
+                linkSuccess(msg.from, !!data.youAreP2);
+              },
+            ),
+          );
+        }
+      });
+      function linkSuccess(id, asP2) {
+        tp.linked = id;
+        tp.isP2 = asP2;
+        tp.attempt = "";
+        const info = G().playerInfo(id);
+        tp.linkedName = info ? info.name : "player";
+        window.GlobedUI.queue((ui) => ui.toast("Linked to " + tp.linkedName));
+      }
+      function requestLink(id, asP2) {
+        if (tp.linked || tp.attempt) {
+          window.GlobedUI.queue((ui) => ui.toast("Cannot link while already linked to a player"));
+          return;
+        }
+        tp.attempt = id;
+        net.send({ t: "direct", to: id, data: { kind: "request", youAreP2: !asP2 } });
+      }
+      // The link button in the Players list.
+      function addLinkButton(ui, cell, width, height, player, popup) {
+        if (!roomOn("twoPlayerMode")) return;
+        if (tp.linked && player.id !== tp.linked) return;
+        const frame = ui.frame(tp.linked ? "gj_linkBtnOff_001.png" : "gj_linkBtn_001.png");
+        ui.scale(frame, 0.8);
+        const menu = ui.menu(),
+          button = ui.button(frame, (k) => {
+            if (tp.linked) {
+              unlink();
+              k.closePopup(popup);
+              return;
+            }
+            linkRequestPopup(k, player);
+          });
+        ui.pos(button, width - 50, height / 2);
+        ui.add(menu, button);
+        ui.add(cell, menu);
+      }
+      function linkRequestPopup(ui, player) {
+        const popup = ui.popup(270, 160, "Link Request", { titleOffset: 14 }),
+          name = ui.label(player.name, "bigFont.fnt", 0.6),
+          icon = window.GlobedUI.playerIcon(ui, player);
+        ui.pos(name, ...popup.at(135, 160 - 35));
+        ui.pos(icon, ...popup.at(135, 90));
+        ui.add(popup.main, name);
+        ui.add(popup.main, icon);
+        const choose = (asP2) => (k) => {
+          requestLink(player.id, asP2);
+          k.closePopup(popup);
+          k.toast("Link request sent to " + player.name);
+        };
+        const one = ui.textButton("Player 1", choose(false), { background: "GJ_button_01.png", font: "bigFont.fnt", scale: 0.7 }),
+          two = ui.textButton("Player 2", choose(true), { background: "GJ_button_01.png", font: "bigFont.fnt", scale: 0.7 });
+        ui.scale(one, 0.8);
+        ui.scale(two, 0.8);
+        ui.pos(one, ...popup.at(135 - 55, 30));
+        ui.pos(two, ...popup.at(135 + 55, 30));
+        ui.add(popup.menu, one);
+        ui.add(popup.menu, two);
+        ui.showPopup(popup);
+      }
+
+      // -------------------------------------------------------- Switcheroo
+      const aps = {
+        gameActive: false,
+        active: "",
+        next: "",
+        showNext: true,
+        settings: { algo: "fairRandom", interval: 5, variance: 2, warning: 1, showNext: true },
+        nextAt: 0,
+        warned: false,
+        detNext: "",
+        queue: [],
+        hidLocal: false,
+        effects: null,
+        glow: 0,
+        preglow: 0,
+        resetRequested: false,
+      };
+      const meActive = () => !aps.gameActive || !aps.active || aps.active === net.myId;
+      const switcherooInactive = () => roomOn("switcheroo") && aps.gameActive && !!aps.active && aps.active !== net.myId;
+      const blocksInput = () => switcherooInactive();
+      function playersHere() {
+        return net.room.players.filter((player) => player.level && player.level === G().local.level).map((player) => player.id);
+      }
+      function calcNext() {
+        const { interval, variance } = aps.settings,
+          base = Math.max(1, Math.abs(interval)),
+          v = Math.min(Math.abs(variance), base - 1);
+        aps.warned = false;
+        aps.nextAt = performance.now() + (base - v + Math.random() * 2 * v) * 1000;
+      }
+      function pickNext() {
+        const all = playersHere();
+        if (!all.length) return net.myId;
+        const algo = aps.settings.algo;
+        if (algo === "random") {
+          if (all.length === 1) return all[0];
+          let next;
+          do next = all[Math.floor(Math.random() * all.length)];
+          while (next === aps.active);
+          return next;
+        }
+        if (!aps.queue.length) {
+          aps.queue = all.slice();
+          if (algo === "sequential") aps.queue.sort().reverse();
+          else {
+            for (let i = aps.queue.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [aps.queue[i], aps.queue[j]] = [aps.queue[j], aps.queue[i]];
+            }
+            // The same person can't play twice in a row.
+            if (aps.queue.length > 1 && aps.queue[aps.queue.length - 1] === aps.active) {
+              [aps.queue[0], aps.queue[aps.queue.length - 1]] = [aps.queue[aps.queue.length - 1], aps.queue[0]];
+            }
+          }
+        }
+        return aps.queue.pop();
+      }
+      // Only the room owner runs the cycle.
+      function ownerTick(now) {
+        if (!aps.gameActive || !net.isOwner()) return;
+        if (now >= aps.nextAt) {
+          calcNext();
+          const player = aps.detNext || pickNext();
+          aps.detNext = "";
+          net.send({ t: "aps", kind: "switch", player });
+        } else if (!aps.warned && aps.nextAt - now < aps.settings.warning * 1000) {
+          aps.detNext = pickNext();
+          aps.warned = true;
+          net.send({ t: "aps", kind: "warn", player: aps.detNext });
+        }
+      }
+      function startCycle(settings) {
+        aps.settings = Object.assign({}, aps.settings, settings);
+        aps.queue = [];
+        aps.warned = false;
+        aps.detNext = "";
+        calcNext();
+        net.send({ t: "aps", kind: "state", gameActive: true, active: net.myId, showNext: aps.settings.showNext, restarting: true });
+      }
+      function stopCycle() {
+        net.send({ t: "aps", kind: "state", gameActive: false, active: "", showNext: aps.settings.showNext, restarting: false });
+      }
+      net.on("aps", (msg) => {
+        if (!roomOn("switcheroo") || !inLevel()) return;
+        if (msg.kind === "state") {
+          aps.gameActive = !!msg.gameActive;
+          aps.active = msg.active || "";
+          aps.settings.showNext = !!msg.showNext;
+          if (msg.restarting) aps.resetRequested = true;
+        } else if (msg.kind === "warn") {
+          aps.next = msg.player;
+          const meNext = msg.player === net.myId,
+            info = G().playerInfo(msg.player);
+          window.GlobedUI.queue((ui) => {
+            if (aps.settings.showNext) {
+              if (meNext) showEffect(ui, true);
+              ui.toast("Switching to " + (meNext ? "you" : info ? info.name : "someone") + " soon!");
+            } else {
+              showEffect(ui, true);
+            }
+          });
+        } else if (msg.kind === "switch") {
+          aps.active = msg.player;
+          const meNow = msg.player === net.myId;
+          window.GlobedUI.queue((ui) => {
+            hideEffects(ui);
+            if (meNow) showEffect(ui, false);
+          });
+          if (meNow) aps.resetIfDead = true;
+        }
+      });
+      // Screen glow when it's about to switch (blue-ish) and on switching.
+      function showEffect(ui, pre) {
+        hideEffects(ui);
+        const layer = G().levelLayer();
+        if (!layer) return;
+        const [w, h] = ui.winSize(),
+          image = ui.sprite("globed/" + (pre ? "switch-screen-preglow" : "switch-screen-glow") + ".png");
+        if (!image) return;
+        const [iw, ih] = ui.getSize(image);
+        ui.anchor(image, 0, 0);
+        ui.scaleXY(image, w / iw, h / ih);
+        ui.pos(image, 0, 0);
+        ui.add(layer, image, 1100);
+        aps.effects = { node: image, until: pre ? Infinity : performance.now() + 500 };
+      }
+      function hideEffects(ui) {
+        if (aps.effects) {
+          if (ui.parent(aps.effects.node)) ui.remove(aps.effects.node);
+          aps.effects = null;
+        }
+      }
+
+      // ------------------------------------------------------ per-frame
+      function frame(call, layer) {
+        const ui = loader.cocos(call),
+          OFF = G().OFF,
+          p1 = mem.ptr(layer + OFF.player1),
+          p2 = mem.ptr(layer + OFF.player2),
+          now = performance.now();
+        if (aps.effects && now > aps.effects.until) hideEffects(ui);
+        // 2-Player: keep the link only while both are here.
+        if (tp.linked) {
+          const remote = G().remote(tp.linked);
+          if (!roomOn("twoPlayerMode") || !net.room.players.some((player) => player.id === tp.linked)) unlink(true);
+          else if (remote && remote.level === G().local.level) mirrorLinked(ui, remote, p1, p2);
+        } else if (tp.restore) {
+          tp.restore = false;
+          ui.visible(p1, true);
+        }
+        // Switcheroo.
+        if (roomOn("switcheroo")) {
+          ownerTick(now);
+          if (aps.resetRequested) {
+            aps.resetRequested = false;
+            call.invoke("PlayLayer::resetLevel", [layer]);
+          }
+          if (aps.active && aps.gameActive && !playersHere().includes(aps.active) && now - (aps.lastSeen || now) > 4000) {
+            aps.gameActive = false;
+            aps.active = "";
+          }
+          if (aps.gameActive && playersHere().includes(aps.active)) aps.lastSeen = now;
+          if (switcherooInactive()) followActive(ui, p1, p2);
+          else if (aps.hidLocal) {
+            aps.hidLocal = false;
+            ui.visible(p1, true);
+          }
+          if (aps.resetIfDead) {
+            aps.resetIfDead = false;
+            // Switched to us while dead: respawn, or we'd stay dead.
+            if (mem.u8(p1 + OFF.isDead)) call.invoke("PlayLayer::resetLevel", [layer]);
+          }
+        } else if (aps.hidLocal) {
+          aps.hidLocal = false;
+          ui.visible(p1, true);
+        }
+      }
+      function drive(ui, player, data) {
+        setPos(ui, player, data.x, data.y);
+        mem.setF64(player + YVEL, data.yv || 0);
+        mem.setU8(player + ON_GROUND, data.og ? 1 : 0);
+      }
+      // Inactive Switcheroo players ride along with the active player.
+      function followActive(ui, p1, p2) {
+        const remote = G().remote(aps.active);
+        aps.hidLocal = true;
+        ui.visible(p1, false);
+        ui.visible(p2, false);
+        if (!remote) return;
+        const data = G().sample(remote, 1);
+        if (data && !data.dead) drive(ui, p1, data);
+      }
+      // Our hidden other player copies the linked player's.
+      function mirrorLinked(ui, remote, p1, p2) {
+        const mirror = mirrorFor(p1, p2),
+          data = G().sample(remote, tp.isP2 ? 1 : 2) || G().sample(remote, 1);
+        ui.visible(mirror, false);
+        if (tp.isP2) ui.visible(p1, false);
+        if (data && !data.dead) drive(ui, mirror, data);
+      }
+      // A linked player's death is ours too (and the other way around).
+      function killsOnDeath(death) {
+        if (tp.linked && death.id === tp.linked) return roomOn("twoPlayerMode");
+        if (aps.gameActive && death.id === aps.active && roomOn("switcheroo")) return true;
+        return false;
+      }
+
+      // ------------------------------------------------------- Switcheroo UI
+      function settingsPopup(ui) {
+        const width = 340,
+          height = 230,
+          popup = ui.popup(width, height, "Switcheroo Settings"),
+          s = Object.assign({}, aps.settings);
+        // Switch logic.
+        const algos = [["random", "Random"], ["fairRandom", "Fair Random"], ["sequential", "Sequential"]],
+          togglers = new Map();
+        const title = ui.label("Switch Logic", "goldFont.fnt", 0.65);
+        ui.pos(title, ...popup.at(75, height - 40));
+        ui.add(popup.main, title);
+        algos.forEach(([value, name], i) => {
+          const toggler = ui.toggler(s.algo === value, (k) => {
+            // Radio buttons: picking one clears the others.
+            s.algo = value;
+            window.GlobedUI.queue((k2) => togglers.forEach((other, key) => k2.setToggled(other, key === value)));
+          }, 0.6);
+          togglers.set(value, toggler);
+          const label = ui.label(name, "bigFont.fnt", 0.45);
+          ui.anchor(label, 0, 0.5);
+          ui.pos(toggler, ...popup.at(26, height - 68 - i * 26));
+          ui.pos(label, ...popup.at(44, height - 68 - i * 26));
+          ui.add(popup.menu, toggler);
+          ui.add(popup.main, label);
+        });
+        const nextToggle = ui.toggler(s.showNext, (k, on) => (s.showNext = on), 0.6),
+          nextLabel = ui.label("Show Next Player", "bigFont.fnt", 0.4);
+        ui.anchor(nextLabel, 0, 0.5);
+        ui.pos(nextToggle, ...popup.at(26, height - 68 - 3 * 26 - 8));
+        ui.pos(nextLabel, ...popup.at(44, height - 68 - 3 * 26 - 8));
+        ui.add(popup.menu, nextToggle);
+        ui.add(popup.main, nextLabel);
+        const info = ui.frame("GJ_infoIcon_001.png");
+        ui.scale(info, 0.5);
+        const infoButton = ui.button(info, (k) =>
+          k.alert(
+            "Switch Logic",
+            "This option determines how to decide the <cy>order</c> in which players will be switched.\n\n<cj>Random</c> - selects a completely random player\n<cj>Fair Random</c> - random, but ensures that in one cycle every player will get to play once\n<cj>Sequential</c> - selects players in the same, consistent order",
+          ),
+        );
+        ui.pos(infoButton, ...popup.at(135, height - 34));
+        ui.add(popup.menu, infoButton);
+        // Sliders.
+        const sliders = [
+          ["Switch Interval", "interval", 1, 30],
+          ["Switch Variance", "variance", 0, 15],
+          ["Warning Delay", "warning", 0, 5],
+        ];
+        sliders.forEach(([name, key, min, max], i) => {
+          const y = height - 45 - i * 48,
+            label = ui.label(name, "bigFont.fnt", 0.35),
+            value = ui.label(s[key].toFixed(1) + "s", "bigFont.fnt", 0.35);
+          ui.pos(label, ...popup.at(255, y));
+          ui.pos(value, ...popup.at(322, y - 20));
+          ui.add(popup.main, label);
+          ui.add(popup.main, value);
+          const slider = ui.slider((s[key] - min) / (max - min), (k, v) => {
+            s[key] = Math.round((min + v * (max - min)) * 10) / 10;
+            k.setText(value, s[key].toFixed(1) + "s");
+          }, 0.55);
+          ui.pos(slider, ...popup.at(245, y - 20));
+          ui.add(popup.main, slider);
+        });
+        // Start / stop.
+        const running = aps.gameActive,
+          start = ui.textButton(running ? "Restart" : "Start", (k) => {
+            sanitize(s);
+            startCycle(s);
+            k.closePopup(popup);
+          }, { background: "GJ_button_01.png", font: "bigFont.fnt", scale: 0.8 });
+        ui.scale(start, 0.85);
+        ui.pos(start, ...popup.at(running ? width / 2 - 45 : width / 2, 24));
+        ui.add(popup.menu, start);
+        if (running) {
+          const stop = ui.textButton("Stop", (k) => {
+            stopCycle();
+            k.closePopup(popup);
+          }, { background: "GJ_button_06.png", font: "bigFont.fnt", scale: 0.8 });
+          ui.scale(stop, 0.85);
+          ui.pos(stop, ...popup.at(width / 2 + 55, 24));
+          ui.add(popup.menu, stop);
+        }
+        popup.onClose = () => {
+          sanitize(s);
+          aps.settings = Object.assign({}, aps.settings, s);
+        };
+        ui.showPopup(popup);
+      }
+      function sanitize(s) {
+        s.interval = Math.max(s.interval, 1);
+        s.variance = Math.min(s.variance, s.interval - 1);
+        s.warning = Math.min(s.warning, s.interval - 1);
+      }
+      // Pause menu buttons: the room owner gets Switcheroo's settings.
+      function pauseButtons(ui) {
+        if (!roomOn("switcheroo") || !net.isOwner()) return [];
+        const image = window.GlobedUI.sprite(ui, "icon-switcheroo");
+        ui.scale(image, 0.9);
+        return [ui.button(image, (k) => settingsPopup(k))];
+      }
+      // Force switch key.
+      document.addEventListener("keydown", (event) => {
+        const key = G() && G().mod.settings.keyForceSwitch;
+        if (event.repeat || !key || event.code !== key || !roomOn("switcheroo") || !net.isOwner() || !aps.gameActive || !inLevel()) return;
+        aps.nextAt = 0;
+      });
+
+      installHooks();
+      window.GlobedModes = {
+        slot,
+        needsP2: () => !!tp.linked && roomOn("twoPlayerMode"),
+        hides(id) {
+          // Switcheroo: only the active player is visible; 2P: the linked
+          // player is shown through their own player.
+          return roomOn("switcheroo") && aps.gameActive && !!aps.active && id !== aps.active;
+        },
+        killsOnDeath,
+        addLinkButton,
+        pauseButtons,
+        link: { state: tp, request: requestLink, unlink },
+        aps,
+        stats,
+        settingsPopup,
+        linkRequestPopup,
       };
     })();
     </script>
