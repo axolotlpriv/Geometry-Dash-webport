@@ -60,6 +60,13 @@ The game can also be played on mobile phones. Performance, controls, and compati
 | Platform              | Web browser           |
 | Technologies          | HTML5, JavaScript     |
 
+## Controls and Saving
+
+* **Pause button:** While you're in a level, a pause button appears in the top-right corner. It does the same thing as pressing `Esc`.
+* **Keybinds:** The keyboard button next to the pause button opens the keybinds menu. There you can add your own keys for jumping, moving, checkpoints and pausing. Your keybinds are kept in your browser.
+* **Saving:** Your progress is saved when you pause, when you switch tabs or close the page, and about once a minute while you're in the menus. Saves are stored in your browser (IndexedDB, with a backup copy in local storage). Downloaded songs are not kept between sessions.
+* **Geode mods:** Geode isn't supported. This port runs a version of the game that was converted to WebAssembly, and Geode and its mods only work with the native Windows, macOS and Android versions of the game.
+
 ## Troubleshooting
 
 **Blank screen:** Reload the page using `Ctrl + F5`.
