@@ -75,7 +75,14 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 | Eclipse Menu | Noclip, speedhack (with audio), show hitboxes, safe mode, respawn delay, no death effect, practice music hack, no mirror, no transitions, unlock all icons and colors, on-screen labels (FPS, CPS, attempts, percentage, noclip accuracy, clock) and toggle shortcuts. |
 | Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
 | Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
-| FPS & Visuals | Unlock or cap the frame rate, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
+| FPS & Visuals | Unlock or cap the frame rate, render resolution, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
+| Extra LDM | Low detail mode on every level, and optionally no decorations, glow, particles, pulsing or shader effects, so busy levels run faster. |
+| Startpos Switcher | Switch between a level's start positions with `Q` and `E` or the arrows at the bottom of the screen. |
+| Click Sounds | A click sound (built-in or your own file) every time you click in a level, plus a custom or muted death sound. |
+| Rainbow Icons | Your icon's colors cycle through the rainbow while you play. |
+| Level Thumbnails | Pictures of levels in level lists, from the [Level Thumbnails](https://levelthumbs.prevter.me/) project. |
+| Auto Pause | Pauses the level when you switch to another tab or window. On by default. |
+| Hide Cursor | Hides the mouse pointer while you play a level. |
 | Globed | Globed's multiplayer with Globed's own menus: the Globed button on the main menu, the Global Room, public and private rooms (passcodes, player limits, hidden rooms, invites, kicking, teams, follower rooms and pinned levels), player counts in level lists, status icons (paused, practicing, talking), other players in the same level with their names, progress markers and a ping overlay, a player list and emotes in the pause menu, voice chat, Death Link, the room game modes (below), and Globed's settings. See below. |
 | Mobile Controls | On phones and tablets: a text bar that opens the on-screen keyboard when you tap a text field in the game, left/right buttons in platformer levels, and landscape lock in fullscreen. |
 
@@ -103,7 +110,7 @@ Cheats like noclip and speedhack turn on safe mode automatically, so they can't 
 
 **The game won't load offline:** Make sure you're opening the downloaded `index.html` file and that you've already opened it once with an Internet connection and let the game finish loading.
 
-**Low performance:** Close other applications or try another browser.
+**Low performance:** The game draws at the size of your window, so a smaller window runs faster. You can also lower **Render resolution** in the FPS & Visuals mod and turn on the Extra LDM mod. Closing other applications or trying another browser can help too.
 
 **Changes aren't showing up:** Force a reload with `Ctrl + F5`.
 

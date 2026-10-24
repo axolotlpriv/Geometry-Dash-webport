@@ -1630,6 +1630,20 @@ self.onmessage = async ({ data: e }) => {
           "GJBaseGameLayer::checkCollisions": 0x6137f0,
           "GJBaseGameLayer::handleButton": 0x6338e0,
           "PlayerObject::collidedWithObject": 0x7919b0,
+          "cocos2d::CCEGLView::sharedOpenGLView": 0x10078c90,
+          "cocos2d::CCEGLView::setFrameSize": 0x10078860,
+          "cocos2d::CCEGLViewProtocol::setDesignResolutionSize": 0x1006bea0,
+          "cocos2d::CCEGLViewProtocol::getDesignResolutionSize": 0x1006b5f0,
+          "cocos2d::CCEGLViewProtocol::getFrameSize": 0x1006b600,
+          "PlayLayer::addObject": 0x7add70,
+          "GJBaseGameLayer::triggerShaderCommand": 0x621030,
+          "GameObject::addGlow": 0x58dee0,
+          "GameObject::addEmptyGlow": 0x58e660,
+          "LevelEditorLayer::create": 0x6d1d40,
+          "PlayLayer::removeAllCheckpoints": 0x7b8040,
+          "GameObject::createWithKey": 0x58b7d0,
+          "PlayLayer::onExit": 0x7bafc0,
+          "PlayLayer::levelComplete": 0x7a7a80,
         };
       let instance = null,
         table = null,
@@ -1855,7 +1869,13 @@ self.onmessage = async ({ data: e }) => {
           if (this.handled) return this.result();
           if (!runHandlers(this, this.index + 1)) {
             this.entry.bypass = true;
-            runLifted(this.entry.slot, this.cpu);
+            if (profile) {
+              const started = performance.now();
+              runLifted(this.entry.slot, this.cpu);
+              this.originalMs = (this.originalMs || 0) + performance.now() - started;
+            } else {
+              runLifted(this.entry.slot, this.cpu);
+            }
             this.handled = true;
           }
           return this.result();
@@ -1907,8 +1927,21 @@ self.onmessage = async ({ data: e }) => {
         if (!entry.handlers.some((handler) => !handler.mod || handler.mod.enabled)) {
           return 0;
         }
+        if (profile) {
+          const started = performance.now(),
+            call = new HookCall(cpu, entry),
+            handled = runHandlers(call, 0);
+          const stat = profile[entry.name] || (profile[entry.name] = { calls: 0, ms: 0 });
+          stat.calls++;
+          // Time spent in mods only (not the game's own function).
+          stat.ms += performance.now() - started - (call.originalMs || 0);
+          return handled ? 1 : 0;
+        }
         return runHandlers(new HookCall(cpu, entry), 0) ? 1 : 0;
       }
+      // Hook timing for finding slow mods: loader.profile.start(), then
+      // loader.profile.stop() returns {hook name: {calls, ms}}.
+      let profile = null;
 
       function hook(target, fn, mod = null) {
         const name = typeof target === "string" ? target : "0x" + target.toString(16);
@@ -2055,6 +2088,15 @@ self.onmessage = async ({ data: e }) => {
         for (const callback of frameCallbacks) {
           if (callback.mod && !callback.mod.enabled) continue;
           try {
+            if (profile) {
+              const started = performance.now();
+              callback.fn(call);
+              const key = "onFrame:" + (callback.mod ? callback.mod.id : callback.fn.name || "anon"),
+                stat = profile[key] || (profile[key] = { calls: 0, ms: 0 });
+              stat.calls++;
+              stat.ms += performance.now() - started;
+              continue;
+            }
             callback.fn(call);
           } catch (frameError) {
             console.error("[mods] frame callback failed", frameError);
@@ -2115,6 +2157,16 @@ self.onmessage = async ({ data: e }) => {
 
       return {
         addresses,
+        profile: {
+          start() {
+            profile = {};
+          },
+          stop() {
+            const out = profile;
+            profile = null;
+            return out;
+          },
+        },
         getGameLayerFields,
         beforeBoot: (task) => bootTasks.push(task),
         runBeforeBoot,
@@ -3165,7 +3217,8 @@ self.onmessage = async ({ data: e }) => {
         }
       });
 
-      loader.cocos = kit;
+      // One kit per hook call: mods often ask for it several times a frame.
+      loader.cocos = (call) => call.__ui || (call.__ui = kit(call));
       // Popups and alerts made by the kit that are still on screen.
       loader.cocosPopupCount = () => openPopups.size;
       // Drops the JS callbacks of every button under `root` (call before a
@@ -3967,7 +4020,52 @@ self.onmessage = async ({ data: e }) => {
         return settings.fpsMode === "unlimited" ? 1e6 : settings.fpsMode === "custom" ? settings.fps : 0;
       }
 
+      // Render resolution: the canvas is drawn at a lower size and scaled up
+      // by the browser. The game's design size stays the same, so only the
+      // number of pixels drawn changes.
+      let appliedSize = "",
+        resizeTimer = 0;
+      function renderSize() {
+        // Auto loses nothing visible, so it also applies with the mod off.
+        const choice = mod.enabled ? mod.settings.resolution : "auto";
+        if (choice === "auto") {
+          const rect = canvas.getBoundingClientRect(),
+            width = Math.min(1920, Math.max(640, Math.round(rect.width * (window.devicePixelRatio || 1))));
+          return [width, Math.round((width * 9) / 16)];
+        }
+        const percent = +choice || 100;
+        return [Math.round(19.2 * percent), Math.round(10.8 * percent)];
+      }
+      function applyResolution() {
+        if (!window.__gdInputReady) return;
+        const [width, height] = renderSize();
+        if (width + "x" + height === appliedSize) return;
+        appliedSize = width + "x" + height;
+        loader.runOnGameThread((call) => {
+          const mem = loader.mem,
+            view = call.invoke("cocos2d::CCEGLView::sharedOpenGLView", []).value,
+            design = call.invoke("cocos2d::CCEGLViewProtocol::getDesignResolutionSize", [view]).value,
+            designWidth = mem.f32(design),
+            designHeight = mem.f32(design + 4);
+          canvas.width = width;
+          canvas.height = height;
+          call.invoke("cocos2d::CCEGLView::setFrameSize", [view, { f32: width }, { f32: height }]);
+          call.invoke("cocos2d::CCEGLViewProtocol::setDesignResolutionSize", [view, { f32: designWidth }, { f32: designHeight }, 2]);
+        });
+      }
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(applyResolution, 300);
+      });
+      const readyTimer = setInterval(() => {
+        if (window.__gdInputReady) {
+          clearInterval(readyTimer);
+          applyResolution();
+        }
+      }, 500);
+
       function applyVisuals() {
+        applyResolution();
         const settings = mod.settings,
           on = mod.enabled;
         canvas.style.filter = on
@@ -3995,12 +4093,20 @@ self.onmessage = async ({ data: e }) => {
           ] },
           { id: "fps", type: "int", name: "Custom FPS", description: "Above your screen's refresh rate the game runs extra updates between screen refreshes (lower input delay, uses more CPU).", min: 15, max: 1000, step: 1, default: 240 },
           { id: "showFps", type: "bool", name: "Show FPS counter", default: false },
+          { type: "title", name: "Performance" },
+          { id: "resolution", type: "choice", name: "Render resolution", description: "Lower resolutions draw fewer pixels and run faster. Auto matches the size of the window.", default: "auto", options: [
+            { value: "auto", name: "Auto (match window)" },
+            { value: "100", name: "1080p (100%)" },
+            { value: "75", name: "810p (75%)" },
+            { value: "50", name: "540p (50%)" },
+            { value: "33", name: "360p (33%)" },
+          ] },
           { type: "title", name: "Visuals" },
           { id: "antialias", type: "bool", name: "Anti-aliasing", description: "Smoother edges on rotated objects. Takes effect after reloading the page.", default: false },
           { id: "brightness", type: "float", name: "Brightness", min: 0.5, max: 1.5, step: 0.01, default: 1 },
           { id: "contrast", type: "float", name: "Contrast", min: 0.5, max: 1.5, step: 0.01, default: 1 },
           { id: "saturation", type: "float", name: "Saturation", min: 0, max: 2, step: 0.01, default: 1 },
-          { id: "sharpScaling", type: "bool", name: "Sharp scaling", description: "Scale the picture without smoothing when the window isn't 1920×1080.", default: false },
+          { id: "sharpScaling", type: "bool", name: "Sharp scaling", description: "Scale the picture without smoothing when it is drawn at a different size from the window.", default: false },
           { id: "noShake", type: "bool", name: "No camera shake", default: false },
         ],
         onToggle: applyVisuals,
@@ -4032,6 +4138,741 @@ self.onmessage = async ({ data: e }) => {
           counter.textContent = frameTimes.length + " FPS";
         }
       }, 250);
+    })();
+    // Extra LDM: strips detail from levels as they load so busy levels run
+    // faster. Low detail mode on every level, plus optional removal of
+    // decorations, glow, particles, pulsing and shader effects.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        // GameObject fields sit 0x18 further on than the bindings say.
+        OFF = {
+          layerLowDetail: 0x884, // GJBaseGameLayer::m_lowDetailMode
+          layerExtraLDM: 0x885, // GJBaseGameLayer::m_extraLDM
+          objectType: 0x3a0,
+          usesAudioScale: 0x3d0,
+          objectID: 0x40c,
+          hasNoParticles: 0x41d,
+          groups: 0x490,
+          isTrigger: 0x4ec,
+          isStartPos: 0x4f2,
+          isHighDetail: 0x4f3,
+          isHide: 0x516,
+        },
+        DECORATION = 7,
+        PARTICLE_OBJECT = 2065,
+        stats = { added: 0, removed: 0, hidden: 0 };
+
+      // Removing an object that something else might refer to (a move
+      // target, a rotation centre) is avoided: objects in a group are hidden
+      // instead, which still saves drawing them.
+      function strip(object) {
+        if (mem.ptr(object + OFF.groups)) {
+          mem.setU8(object + OFF.isHide, 1);
+          stats.hidden++;
+          return false;
+        }
+        stats.removed++;
+        return true;
+      }
+
+      loader.registerMod({
+        id: "web.extra-ldm",
+        name: "Extra LDM",
+        developer: "webport",
+        version: "1.0",
+        description: "Removes extra detail from levels so they run faster on slow devices. Changes apply when a level is opened.",
+        settings: [
+          { id: "forceLDM", type: "bool", name: "Low detail mode on every level", description: "Removes the objects a level marks as high detail, even if the level has no LDM option.", default: true },
+          { id: "decorations", type: "bool", name: "Hide decorations", description: "Hides every object that isn't part of the gameplay. Makes most levels look very bare.", default: false },
+          { id: "glow", type: "bool", name: "No object glow", default: true },
+          { id: "particles", type: "bool", name: "No particles", description: "Removes particle objects and the particles on orbs, pads and portals.", default: true },
+          { id: "pulse", type: "bool", name: "No object pulsing", description: "Stops objects pulsing to the music.", default: false },
+          { id: "shaders", type: "bool", name: "No shader effects", description: "Ignores shader triggers (glitch, blur, shock waves and so on).", default: false },
+        ],
+        setup(mod) {
+          // Glow is made when an object is created, before it is added, so it
+          // is skipped while a level (not the editor) is open.
+          let level = 0;
+          mod.hook("PlayLayer::init", (call) => {
+            level = call.arg(0);
+          });
+          mod.hook("PlayLayer::onExit", (call) => {
+            if (call.arg(0) === level) level = 0;
+          });
+          mod.hook("LevelEditorLayer::create", () => {
+            level = 0;
+          });
+          mod.hook("GameObject::addGlow", (call) => {
+            if (level && mod.settings.glow) return call.skip();
+          });
+          mod.hook("PlayLayer::addObject", (call) => {
+            const layer = call.arg(0),
+              object = call.arg(1),
+              settings = mod.settings;
+            stats.added++;
+            if (!mem.u8(object + OFF.isTrigger) && !mem.u8(object + OFF.isStartPos)) {
+              if (settings.forceLDM) {
+                mem.setU8(layer + OFF.layerLowDetail, 1);
+                mem.setU8(layer + OFF.layerExtraLDM, 1);
+                if (mem.u8(object + OFF.isHighDetail) && strip(object)) return call.skip();
+              }
+              if (settings.decorations && mem.i32(object + OFF.objectType) === DECORATION && strip(object)) return call.skip();
+              if (settings.particles) {
+                if (mem.i32(object + OFF.objectID) === PARTICLE_OBJECT && strip(object)) return call.skip();
+                mem.setU8(object + OFF.hasNoParticles, 1);
+              }
+              if (settings.pulse) mem.setU8(object + OFF.usesAudioScale, 0);
+            }
+            call.callOriginal();
+          });
+          mod.hook("GJBaseGameLayer::triggerShaderCommand", (call) => {
+            if (mod.settings.shaders) call.skip();
+          });
+        },
+      });
+      loader.extraLDMStats = stats;
+    })();
+    // Startpos Switcher: pick which start position a level begins from, with
+    // Q/E (or the arrows under the progress bar), like the Geode mod.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        OFF = {
+          startPosObject: 0x3188, // GJBaseGameLayer::m_startPosObject
+          isTestMode: 0x3230, // GJBaseGameLayer::m_isTestMode
+          objectID: 0x40c,
+          positionX: 0x3b8, // GameObject::m_positionX (double)
+        },
+        START_POS = 31,
+        state = { layer: 0, objects: [], seen: 0, index: -1, testMode: 0, paused: false, ui: null, shown: "" };
+
+      function sortedObjects() {
+        return state.objects.slice().sort((a, b) => mem.f64(a + OFF.positionX) - mem.f64(b + OFF.positionX));
+      }
+
+      function updateUi(call) {
+        if (!state.ui || !mod.enabled) return;
+        const ui = loader.cocos(call),
+          count = state.objects.length,
+          text = state.index + 1 + "/" + count,
+          shown = count && mod.settings.showButtons;
+        ui.visible(state.ui.menu, shown);
+        if (text !== state.shown) {
+          state.shown = text;
+          ui.setText(state.ui.label, text);
+        }
+      }
+
+      function switchTo(call, index) {
+        const layer = state.layer,
+          objects = sortedObjects();
+        if (!layer || !objects.length || state.paused) return;
+        state.objects = objects;
+        state.index = ((index + 1 + objects.length + 1) % (objects.length + 1)) - 1;
+        const target = state.index < 0 ? 0 : objects[state.index];
+        mem.setPtr(layer + OFF.startPosObject, target);
+        // A run from a start position is a test run and doesn't save progress.
+        mem.setU8(layer + OFF.isTestMode, target ? 1 : state.testMode);
+        call.invoke("PlayLayer::removeAllCheckpoints", [layer]);
+        call.invoke("PlayLayer::resetLevel", [layer]);
+        updateUi(call);
+        const ui = loader.cocos(call);
+        if (state.ui) ui.pulse(state.ui.label, 1.2, 0.3);
+      }
+
+      function createUi(call) {
+        const ui = loader.cocos(call),
+          [width] = ui.winSize(),
+          menu = ui.menu(),
+          label = ui.label("0/0", "bigFont.fnt", 0.4),
+          left = ui.frame("GJ_arrow_02_001.png"),
+          right = ui.frame("GJ_arrow_02_001.png");
+        ui.flipX(right);
+        ui.scale(left, 0.6);
+        ui.scale(right, 0.6);
+        const prev = ui.button(left, () => loader.runOnGameThread((c) => switchTo(c, state.index - 1))),
+          next = ui.button(right, () => loader.runOnGameThread((c) => switchTo(c, state.index + 1)));
+        ui.add(menu, prev);
+        ui.add(menu, next);
+        ui.pos(prev, width / 2 - 55, 20);
+        ui.pos(next, width / 2 + 55, 20);
+        ui.pos(label, width / 2, 20);
+        ui.add(menu, label);
+        ui.opacity(label, 200);
+        ui.add(state.layer, menu, 1000);
+        state.ui = { menu, label };
+        state.shown = "";
+        ui.visible(menu, false);
+      }
+
+      const mod = loader.registerMod({
+        id: "web.startpos-switcher",
+        name: "Startpos Switcher",
+        developer: "webport",
+        version: "1.0",
+        description: "Switch between the start positions in a level with Q and E, or the arrows at the bottom of the screen.",
+        settings: [
+          { id: "showButtons", type: "bool", name: "Show switcher buttons", default: true },
+          { id: "keyPrev", type: "key", name: "Previous start position", default: "KeyQ" },
+          { id: "keyNext", type: "key", name: "Next start position", default: "KeyE" },
+        ],
+        onSettingChanged: () => loader.runOnGameThread(updateUi),
+        setup(mod) {
+          mod.hook("PlayLayer::init", (call) => {
+            state.layer = call.arg(0);
+            state.objects = [];
+            state.seen = 0;
+            state.index = -1;
+            state.paused = false;
+            state.ui = null;
+            call.callOriginal();
+            state.testMode = mem.u8(state.layer + OFF.isTestMode);
+            createUi(call);
+          });
+          mod.hook("PlayLayer::onExit", (call) => {
+            if (call.arg(0) !== state.layer) return;
+            state.layer = 0;
+            state.ui = null;
+          });
+          mod.hook("PlayLayer::pauseGame", () => {
+            state.paused = true;
+          });
+          for (const name of ["PlayLayer::resume", "PlayLayer::resumeAndRestart"]) {
+            mod.hook(name, () => {
+              state.paused = false;
+            });
+          }
+          mod.hook("PlayLayer::addObject", (call) => {
+            const object = call.arg(1);
+            if (mem.i32(object + OFF.objectID) === START_POS) state.objects.push(object);
+          });
+        },
+      });
+
+      // Levels load their objects over a few frames, so the count and the
+      // start position the level opened at are picked up as they arrive.
+      loader.onFrame((call) => {
+        if (!state.layer || !state.ui) return;
+        if (state.objects.length !== state.seen) {
+          state.seen = state.objects.length;
+          state.objects = sortedObjects();
+          state.index = state.objects.indexOf(mem.ptr(state.layer + OFF.startPosObject));
+          updateUi(call);
+        }
+      }, mod);
+
+      window.addEventListener(
+        "keydown",
+        (event) => {
+          if (!mod.enabled || event.repeat || !state.layer || window.__gdModsOpen || window.__gdKeybindsOpen) return;
+          if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+          const step = event.code === mod.settings.keyPrev ? -1 : event.code === mod.settings.keyNext ? 1 : 0;
+          if (step) loader.runOnGameThread((call) => switchTo(call, state.index + step));
+        },
+        true,
+      );
+      loader.startposSwitcher = state;
+    })();
+    // Click Sounds: a sound on every click in a level, and a choice of death
+    // sound. Built-in sounds are made on the fly; custom ones are audio files
+    // kept in the browser.
+    (function () {
+      const loader = GDModLoader,
+        DB_NAME = "gd-click-sounds",
+        DEATH_SOUND = /explode_11/i,
+        custom = { click: null, release: null, death: null },
+        names = { click: "", release: "", death: "" };
+      let noise = null;
+
+      function db() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, 1);
+          request.onupgradeneeded = () => request.result.createObjectStore("sounds");
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+      async function store(mode, fn) {
+        const database = await db();
+        return new Promise((resolve, reject) => {
+          const transaction = database.transaction("sounds", mode),
+            request = fn(transaction.objectStore("sounds"));
+          transaction.oncomplete = () => resolve(request && request.result);
+          transaction.onerror = transaction.onabort = () => reject(transaction.error);
+        });
+      }
+
+      function audio() {
+        const engine = window.Module && Module.__gdAudio;
+        return engine && engine.ensure() ? engine : null;
+      }
+      async function decode(kind, bytes) {
+        const engine = audio();
+        if (!engine || !bytes) return;
+        try {
+          custom[kind] = await engine.ctx.decodeAudioData(bytes.slice(0));
+        } catch (decodeError) {
+          custom[kind] = null;
+          console.warn("[click-sounds] Could not read the " + kind + " sound", decodeError);
+        }
+      }
+      async function loadCustom() {
+        for (const kind of Object.keys(custom)) {
+          try {
+            const saved = await store("readonly", (s) => s.get(kind));
+            if (saved) {
+              names[kind] = saved.name;
+              await decode(kind, saved.data);
+            }
+          } catch (loadError) {}
+        }
+      }
+
+      // Built-in sounds: short filtered noise bursts and a soft tick.
+      function playBuiltIn(engine, type, volume, release) {
+        const ctx = engine.ctx,
+          now = ctx.currentTime,
+          gain = ctx.createGain();
+        gain.connect(engine.master || ctx.destination);
+        if (!noise) {
+          noise = ctx.createBuffer(1, Math.round(ctx.sampleRate * 0.05), ctx.sampleRate);
+          const data = noise.getChannelData(0);
+          for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        }
+        const burst = (at, length, frequency, level) => {
+          const source = ctx.createBufferSource(),
+            filter = ctx.createBiquadFilter(),
+            envelope = ctx.createGain();
+          source.buffer = noise;
+          filter.type = "bandpass";
+          filter.frequency.value = frequency;
+          filter.Q.value = 1.2;
+          envelope.gain.setValueAtTime(level, at);
+          envelope.gain.exponentialRampToValueAtTime(0.001, at + length);
+          source.connect(filter).connect(envelope).connect(gain);
+          source.start(at);
+          source.stop(at + length + 0.01);
+        };
+        gain.gain.value = volume * (release ? 0.6 : 1);
+        if (type === "click") burst(now, 0.025, release ? 3200 : 2400, 1.6);
+        else if (type === "mechanical") {
+          burst(now, 0.02, release ? 1800 : 1300, 2);
+          burst(now + 0.012, 0.035, release ? 4200 : 3500, 0.9);
+        } else if (type === "soft") {
+          const osc = ctx.createOscillator(),
+            envelope = ctx.createGain();
+          osc.frequency.setValueAtTime(release ? 900 : 1300, now);
+          osc.frequency.exponentialRampToValueAtTime(release ? 500 : 650, now + 0.04);
+          envelope.gain.setValueAtTime(0.8, now);
+          envelope.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+          osc.connect(envelope).connect(gain);
+          osc.start(now);
+          osc.stop(now + 0.06);
+        }
+      }
+      function playBuffer(engine, buffer, volume, destination) {
+        const source = engine.ctx.createBufferSource(),
+          gain = engine.ctx.createGain();
+        source.buffer = buffer;
+        gain.gain.value = volume;
+        source.connect(gain).connect(destination || engine.master || engine.ctx.destination);
+        source.start();
+      }
+
+      function click(release) {
+        const settings = mod.settings,
+          engine = audio(),
+          type = settings.clickSound;
+        if (!engine || type === "none" || (release && !settings.releaseSounds)) return;
+        if (type === "custom") {
+          const buffer = (release && custom.release) || custom.click;
+          if (buffer) playBuffer(engine, buffer, settings.volume * (release && !custom.release ? 0.6 : 1));
+        } else {
+          playBuiltIn(engine, type, settings.volume, release);
+        }
+      }
+
+      // The death sound goes through the game's sound player: it is muted
+      // there and the replacement played on the same (effects) volume.
+      function wrapAudio() {
+        const engine = window.Module && Module.__gdAudio;
+        if (!engine || engine.__clickSoundsWrapped) return !!engine;
+        const play = engine.play;
+        engine.play = function (soundId, groupId, paused) {
+          const sound = this.sounds[soundId],
+            choice = mod.enabled ? mod.settings.deathSound : "default";
+          if (choice !== "default" && sound && DEATH_SOUND.test(String(sound.path || ""))) {
+            const id = play.call(this, soundId, groupId, true);
+            this.channels[id].ended = 1;
+            if (choice === "custom" && custom.death && this.ctx) {
+              const group = groupId && this.groups[groupId];
+              playBuffer(this, custom.death, mod.settings.volume, group ? group.gain : null);
+            }
+            return id;
+          }
+          return play.call(this, soundId, groupId, paused);
+        };
+        engine.__clickSoundsWrapped = true;
+        return true;
+      }
+      const wrapTimer = setInterval(() => {
+        if (wrapAudio()) {
+          clearInterval(wrapTimer);
+          loadCustom();
+        }
+      }, 1000);
+
+      function fileRow(kind, label) {
+        return (row, mod) => {
+          const title = document.createElement("div"),
+            name = document.createElement("small"),
+            pick = document.createElement("button"),
+            clear = document.createElement("button"),
+            input = document.createElement("input");
+          title.className = "gd-mod-setting-label";
+          title.textContent = label;
+          name.textContent = names[kind] || "No file chosen";
+          title.appendChild(name);
+          input.type = "file";
+          input.accept = "audio/*";
+          input.hidden = true;
+          pick.type = clear.type = "button";
+          pick.textContent = "Choose file";
+          clear.textContent = "Clear";
+          pick.onclick = () => input.click();
+          input.onchange = async () => {
+            const file = input.files[0];
+            if (!file) return;
+            const data = await file.arrayBuffer();
+            names[kind] = file.name;
+            name.textContent = file.name;
+            await decode(kind, data);
+            try {
+              await store("readwrite", (s) => s.put({ name: file.name, data }, kind));
+            } catch (saveError) {
+              name.textContent = file.name + " (couldn't be saved)";
+            }
+            if (!custom[kind]) name.textContent = file.name + " (unsupported format)";
+          };
+          clear.onclick = async () => {
+            custom[kind] = null;
+            names[kind] = "";
+            name.textContent = "No file chosen";
+            try {
+              await store("readwrite", (s) => s.delete(kind));
+            } catch (deleteError) {}
+          };
+          row.style.display = "flex";
+          row.style.alignItems = "center";
+          row.style.gap = "8px";
+          title.style.flex = "1";
+          row.append(title, pick, clear, input);
+        };
+      }
+
+      const mod = loader.registerMod({
+        id: "web.click-sounds",
+        name: "Click Sounds",
+        developer: "webport",
+        version: "1.0",
+        description: "Plays a sound every time you click in a level, and lets you change or mute the death sound.",
+        settings: [
+          { type: "title", name: "Clicks" },
+          { id: "clickSound", type: "choice", name: "Click sound", default: "click", options: [
+            { value: "click", name: "Click" },
+            { value: "mechanical", name: "Mechanical keyboard" },
+            { value: "soft", name: "Soft tick" },
+            { value: "custom", name: "Custom file" },
+            { value: "none", name: "None" },
+          ] },
+          { id: "releaseSounds", type: "bool", name: "Release sounds", description: "Also play a quieter sound when you let go.", default: true },
+          { id: "volume", type: "float", name: "Volume", min: 0, max: 2, step: 0.05, default: 1 },
+          { id: "clickFile", type: "custom", render: fileRow("click", "Custom click sound") },
+          { id: "releaseFile", type: "custom", render: fileRow("release", "Custom release sound (optional)") },
+          { type: "title", name: "Death" },
+          { id: "deathSound", type: "choice", name: "Death sound", default: "default", options: [
+            { value: "default", name: "Game default" },
+            { value: "custom", name: "Custom file" },
+            { value: "none", name: "None" },
+          ] },
+          { id: "deathFile", type: "custom", render: fileRow("death", "Custom death sound") },
+        ],
+        setup(mod) {
+          mod.hook("GJBaseGameLayer::handleButton", (call) => {
+            const down = call.arg(1) & 255;
+            click(!down);
+          });
+        },
+      });
+    })();
+    // Rainbow Icons: cycles the player's colors through the rainbow in
+    // levels.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        OFF = { player1: 0xda0, player2: 0xda8 },
+        // PlayerObject::setColor takes its CCRGBAProtocol base as `this`.
+        RGBA = 0x140;
+      let layer = 0;
+
+      function hsv(hue, saturation, value) {
+        const h = (((hue % 360) + 360) % 360) / 60,
+          c = value * saturation,
+          x = c * (1 - Math.abs((h % 2) - 1)),
+          m = value - c,
+          [r, g, b] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
+        return { bytes: Uint8Array.from([Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255), 0]) };
+      }
+
+      const mod = loader.registerMod({
+        id: "web.rainbow-icons",
+        name: "Rainbow Icons",
+        developer: "webport",
+        version: "1.0",
+        description: "Makes your icon cycle through the colors of the rainbow while you play.",
+        settings: [
+          { id: "primary", type: "bool", name: "Rainbow main color", default: true },
+          { id: "secondary", type: "bool", name: "Rainbow secondary color", default: true },
+          { id: "speed", type: "float", name: "Speed", min: 0.1, max: 5, step: 0.1, default: 1 },
+          { id: "saturation", type: "float", name: "Saturation", min: 0, max: 1, step: 0.05, default: 0.8 },
+          { id: "brightness", type: "float", name: "Brightness", min: 0.2, max: 1, step: 0.05, default: 1 },
+          { id: "offset", type: "int", name: "Secondary color hue offset", description: "How far around the color wheel the secondary color is from the main color.", min: 0, max: 360, step: 5, default: 180 },
+          { id: "player2Offset", type: "int", name: "Player 2 hue offset", description: "For dual mode and 2-player levels.", min: 0, max: 360, step: 5, default: 90 },
+        ],
+        setup(mod) {
+          mod.hook("PlayLayer::init", (call) => {
+            layer = call.arg(0);
+          });
+          mod.hook("PlayLayer::onExit", (call) => {
+            if (call.arg(0) === layer) layer = 0;
+          });
+        },
+      });
+
+      loader.onFrame((call) => {
+        if (!layer) return;
+        const settings = mod.settings,
+          hue = (performance.now() / 1000) * settings.speed * 120;
+        [OFF.player1, OFF.player2].forEach((offset, index) => {
+          const player = mem.ptr(layer + offset),
+            base = hue + index * settings.player2Offset;
+          if (!player) return;
+          if (settings.primary) call.invoke("PlayerObject::setColor", [player + RGBA, hsv(base, settings.saturation, settings.brightness)]);
+          if (settings.secondary) call.invoke("PlayerObject::setSecondColor", [player, hsv(base + settings.offset, settings.saturation, settings.brightness)]);
+        });
+      }, mod);
+    })();
+    // Auto Pause: pauses the level when you switch tabs or click away from
+    // the game, so you don't come back to a death.
+    (function () {
+      const loader = GDModLoader,
+        state = { layer: 0, paused: false, complete: false };
+
+      function pause(reason) {
+        if (!mod.enabled || !state.layer || state.paused || state.complete) return;
+        if (reason === "blur" && !mod.settings.onBlur) return;
+        loader.runOnGameThread((call) => {
+          if (!state.layer || state.paused || state.complete) return;
+          call.invoke("PlayLayer::pauseGame", [state.layer, 1]);
+        });
+      }
+
+      const mod = loader.registerMod({
+        id: "web.auto-pause",
+        name: "Auto Pause",
+        developer: "webport",
+        version: "1.0",
+        description: "Pauses the level when you switch to another tab or window.",
+        enabledByDefault: true,
+        settings: [
+          { id: "onBlur", type: "bool", name: "Also pause when the window loses focus", description: "For example when clicking on another window or monitor. Switching tabs always pauses.", default: true },
+        ],
+        setup(mod) {
+          mod.hook("PlayLayer::init", (call) => {
+            state.layer = call.arg(0);
+            state.paused = false;
+            state.complete = false;
+          });
+          mod.hook("PlayLayer::onExit", (call) => {
+            if (call.arg(0) === state.layer) state.layer = 0;
+          });
+          mod.hook("PlayLayer::pauseGame", () => {
+            state.paused = true;
+          });
+          for (const name of ["PlayLayer::resume", "PlayLayer::resumeAndRestart"]) {
+            mod.hook(name, () => {
+              state.paused = false;
+            });
+          }
+          mod.hook("PlayLayer::levelComplete", () => {
+            state.complete = true;
+          });
+          mod.hook("PlayLayer::resetLevel", () => {
+            state.complete = false;
+          });
+        },
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) pause("hidden");
+      });
+      window.addEventListener("blur", () => pause("blur"));
+    })();
+    // Hide Cursor: hides the mouse pointer over the game while a level is
+    // being played, and shows it again in menus and the pause menu.
+    (function () {
+      const loader = GDModLoader,
+        canvas = document.getElementById("canvas"),
+        state = { layer: 0, paused: false, complete: false };
+
+      function update() {
+        const hide = mod.enabled && state.layer && !state.paused && !state.complete;
+        canvas.style.cursor = hide ? "none" : "";
+      }
+
+      const mod = loader.registerMod({
+        id: "web.hide-cursor",
+        name: "Hide Cursor",
+        developer: "webport",
+        version: "1.0",
+        description: "Hides the mouse pointer while you play a level.",
+        onToggle: update,
+        setup(mod) {
+          const on = (name, fn) =>
+            mod.hook(name, (call) => {
+              fn(call);
+              update();
+            });
+          on("PlayLayer::init", (call) => {
+            state.layer = call.arg(0);
+            state.paused = state.complete = false;
+          });
+          on("PlayLayer::onExit", (call) => {
+            if (call.arg(0) === state.layer) state.layer = 0;
+          });
+          on("PlayLayer::pauseGame", () => {
+            state.paused = true;
+          });
+          on("PlayLayer::resume", () => {
+            state.paused = false;
+          });
+          on("PlayLayer::resumeAndRestart", () => {
+            state.paused = false;
+          });
+          on("PlayLayer::levelComplete", () => {
+            state.complete = true;
+          });
+          on("PlayLayer::resetLevel", () => {
+            state.complete = false;
+          });
+        },
+      });
+    })();
+    // Level Thumbnails: shows a screenshot of each level in level lists,
+    // from the Level Thumbnails project (levelthumbs.prevter.me) used by the
+    // Geode mod.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        API = "https://levelthumbs.prevter.me/thumbnail/",
+        DIR = "/Resources/thumbs",
+        loaded = new Set(),
+        missing = new Set(),
+        loading = new Map(),
+        cells = new Map(); // cell -> { id, sprite }
+
+      async function fetchThumbnail(id) {
+        try {
+          const response = await fetch(API + id + "/small");
+          if (!response.ok) throw new Error(response.status);
+          const bitmap = await createImageBitmap(await response.blob()),
+            canvas = document.createElement("canvas");
+          // Small enough to keep memory use down; it's shown 90 points tall.
+          canvas.height = 180;
+          canvas.width = Math.round((bitmap.width / bitmap.height) * 180);
+          canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png")),
+            bytes = new Uint8Array(await blob.arrayBuffer());
+          try {
+            Module.FS.mkdir(DIR);
+          } catch (mkdirError) {
+            // already there
+          }
+          for (const suffix of ["", "-hd", "-uhd"]) Module.FS.writeFile(DIR + "/" + id + suffix + ".png", bytes);
+          loaded.add(id);
+        } catch (fetchError) {
+          missing.add(id);
+        }
+      }
+
+      function attach(call, cell) {
+        const entry = cells.get(cell);
+        if (!entry || entry.sprite || !loaded.has(entry.id)) return;
+        const ui = loader.cocos(call),
+          sprite = ui.sprite("thumbs/" + entry.id + ".png");
+        if (!sprite) return;
+        const [width, height] = ui.getSize(cell),
+          [spriteWidth, spriteHeight] = ui.getSize(sprite),
+          scale = height / spriteHeight;
+        ui.scale(sprite, scale);
+        ui.anchor(sprite, 1, 0);
+        ui.pos(sprite, width, 0);
+        ui.opacity(sprite, Math.round(mod.settings.opacity * 255));
+        // Keep the thumbnail inside the right part of the cell.
+        if (spriteWidth * scale > width * 0.6) ui.scale(sprite, (width * 0.6) / spriteWidth);
+        ui.add(cell, sprite, -1);
+        entry.sprite = sprite;
+      }
+
+      // Cells are retained while a thumbnail may still be added to them, and
+      // let go once they leave the screen.
+      function sweep(ui) {
+        for (const cell of cells.keys()) {
+          if (!ui.parent(cell)) {
+            ui.release(cell);
+            cells.delete(cell);
+          }
+        }
+      }
+
+      const mod = loader.registerMod({
+        id: "web.level-thumbnails",
+        name: "Level Thumbnails",
+        developer: "webport",
+        version: "1.0",
+        description: "Shows a picture of each level in level lists. Thumbnails come from the Level Thumbnails project by prevter and its contributors.",
+        settings: [{ id: "opacity", type: "float", name: "Opacity", min: 0.1, max: 1, step: 0.05, default: 0.6 }],
+        setup(mod) {
+          mod.hook("LevelCell::loadFromLevel", (call) => {
+            const cell = call.arg(0),
+              level = call.arg(1);
+            call.callOriginal();
+            if (!level) return;
+            const ui = loader.cocos(call),
+              id = mem.cString(ui.ptr("GJGameLevel::getCoinKey", [level, 1])).replace(/_1$/, "");
+            if (!/^\d+$/.test(id) || id === "0" || missing.has(id)) return;
+            sweep(ui);
+            let entry = cells.get(cell);
+            if (!entry) {
+              ui.retain(cell);
+              entry = { id, sprite: 0 };
+              cells.set(cell, entry);
+            } else if (entry.id !== id) {
+              if (entry.sprite) ui.remove(entry.sprite);
+              entry.id = id;
+              entry.sprite = 0;
+            }
+            if (loaded.has(id)) return attach(call, cell);
+            if (!loading.has(id)) loading.set(id, fetchThumbnail(id));
+            loading.get(id).then(() =>
+              loader.runOnGameThread((c) => {
+                if (cells.has(cell) && loader.cocos(c).parent(cell)) attach(c, cell);
+              }),
+            );
+          });
+        },
+      });
     })();
     // Mobile Controls: what the Windows game lacks on phones and tablets.
     // A text bar that brings up the on-screen keyboard when a game text
@@ -10338,15 +11179,15 @@ self.onmessage = async ({ data: e }) => {
           gameX = Math.max(
             0,
             Math.min(
-              1919,
-              Math.round(((mouseEvent.clientX - rect.left) * 1920) / rect.width),
+              canvas.width - 1,
+              Math.round(((mouseEvent.clientX - rect.left) * canvas.width) / rect.width),
             ),
           ),
           gameY = Math.max(
             0,
             Math.min(
-              1079,
-              Math.round(((mouseEvent.clientY - rect.top) * 1080) / rect.height),
+              canvas.height - 1,
+              Math.round(((mouseEvent.clientY - rect.top) * canvas.height) / rect.height),
             ),
           );
         return (
@@ -10832,18 +11673,18 @@ self.onmessage = async ({ data: e }) => {
           touchX = Math.max(
             0,
             Math.min(
-              1919,
+              touchCanvas.width - 1,
               Math.round(
-                ((touchPoint.clientX - touchRect.left) * 1920) / touchRect.width,
+                ((touchPoint.clientX - touchRect.left) * touchCanvas.width) / touchRect.width,
               ),
             ),
           ),
           touchY = Math.max(
             0,
             Math.min(
-              1079,
+              touchCanvas.height - 1,
               Math.round(
-                ((touchPoint.clientY - touchRect.top) * 1080) / touchRect.height,
+                ((touchPoint.clientY - touchRect.top) * touchCanvas.height) / touchRect.height,
               ),
             ),
           );
