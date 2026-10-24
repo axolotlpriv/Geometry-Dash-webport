@@ -76,11 +76,12 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 | Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
 | Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
 | FPS & Visuals | Unlock or cap the frame rate, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
+| Globed | Play online with friends: create a room, share its 6-digit ID, and see each other's icons, names and deaths in the same level. Death Link (set by the room owner) makes everyone die when anyone dies. |
 | Mobile Controls | On phones and tablets: a text bar that opens the on-screen keyboard when you tap a text field in the game, left/right buttons in platformer levels, and landscape lock in fullscreen. |
 
 Cheats like noclip and speedhack turn on safe mode automatically, so they can't save progress. You can change this in the Eclipse Menu settings.
 
-**Why not Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport. Mods that need their own servers, like Globed, aren't available.
+**Why not Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport. Globed's own servers only accept the real Globed mod, so the webport's Globed connects players directly to each other (peer to peer, through WebRTC). Everyone you play with needs to use the webport.
 
 ## Troubleshooting
 
