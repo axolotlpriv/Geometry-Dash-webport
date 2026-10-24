@@ -266,6 +266,273 @@
       margin-top: 12px;
     }
 
+    #gd-mods {
+      position: fixed;
+      inset: 0;
+      z-index: 1000001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: #0009;
+      box-sizing: border-box;
+    }
+
+    #gd-mods[hidden] {
+      display: none;
+    }
+
+    #gd-mods-panel {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 820px;
+      height: 100%;
+      max-height: 560px;
+      border: 1px solid #ffffff40;
+      border-radius: 8px;
+      background: #111e;
+      color: #fff;
+      font: 14px/1.4 sans-serif;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    #gd-mods-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #ffffff1a;
+    }
+
+    #gd-mods-header h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    #gd-mods-header .gd-mods-count {
+      flex: 1;
+      color: #999;
+      font-size: 12px;
+    }
+
+    #gd-mods button,
+    #gd-mods select,
+    #gd-mods input[type="number"] {
+      padding: 4px 8px;
+      border: 1px solid #ffffff40;
+      border-radius: 4px;
+      background: #ffffff14;
+      color: inherit;
+      font: inherit;
+      font-size: 12px;
+    }
+
+    #gd-mods button {
+      cursor: pointer;
+    }
+
+    #gd-mods button:hover {
+      background: #ffffff2a;
+    }
+
+    #gd-mods select option {
+      background: #222;
+    }
+
+    #gd-mods-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    #gd-mods-list {
+      flex: 0 0 260px;
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      border-right: 1px solid #ffffff1a;
+      list-style: none;
+    }
+
+    #gd-mods-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #ffffff12;
+      cursor: pointer;
+    }
+
+    #gd-mods-list li[aria-selected="true"] {
+      background: #ffffff1a;
+    }
+
+    #gd-mods-list .gd-mod-name {
+      flex: 1;
+      min-width: 0;
+    }
+
+    #gd-mods-list .gd-mod-name small {
+      display: block;
+      overflow: hidden;
+      color: #999;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    #gd-mods-detail {
+      flex: 1;
+      min-width: 0;
+      padding: 14px 18px;
+      overflow-y: auto;
+    }
+
+    #gd-mods-detail h3 {
+      margin: 0 0 2px;
+      font-size: 17px;
+    }
+
+    #gd-mods-detail .gd-mod-meta {
+      margin: 0 0 8px;
+      color: #999;
+      font-size: 12px;
+    }
+
+    #gd-mods-detail .gd-mod-description {
+      margin: 0 0 12px;
+      color: #ccc;
+      white-space: pre-line;
+    }
+
+    #gd-mods-detail .gd-mod-warning {
+      margin: 0 0 12px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      background: #a3300033;
+      color: #ffb4a0;
+      font-size: 12px;
+    }
+
+    .gd-mod-setting-title {
+      margin: 14px 0 4px;
+      color: #9dcaff;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .gd-mod-setting {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 0;
+      border-top: 1px solid #ffffff12;
+    }
+
+    .gd-mod-setting > label,
+    .gd-mod-setting > .gd-mod-setting-label {
+      flex: 1 1 200px;
+    }
+
+    .gd-mod-setting small {
+      display: block;
+      color: #999;
+    }
+
+    .gd-mod-setting input[type="range"] {
+      width: 140px;
+    }
+
+    .gd-mod-setting input[type="number"] {
+      width: 70px;
+    }
+
+    #gd-mods .gd-switch {
+      position: relative;
+      flex: none;
+      width: 36px;
+      height: 20px;
+      margin: 0;
+      appearance: none;
+      border-radius: 10px;
+      background: #555;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #gd-mods .gd-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.15s;
+    }
+
+    #gd-mods .gd-switch:checked {
+      background: #3a9a3a;
+    }
+
+    #gd-mods .gd-switch:checked::after {
+      transform: translateX(16px);
+    }
+
+    #gd-mods-back {
+      display: none;
+    }
+
+    @media (max-width: 640px) {
+      #gd-mods {
+        padding: 0;
+      }
+
+      #gd-mods-panel {
+        max-height: none;
+        border-radius: 0;
+      }
+
+      #gd-mods-list {
+        flex-basis: 100%;
+        border-right: 0;
+      }
+
+      #gd-mods-detail {
+        display: none;
+      }
+
+      #gd-mods.gd-mods-showing-detail #gd-mods-list {
+        display: none;
+      }
+
+      #gd-mods.gd-mods-showing-detail #gd-mods-detail {
+        display: block;
+      }
+
+      #gd-mods.gd-mods-showing-detail #gd-mods-back {
+        display: inline-block;
+      }
+    }
+
+    #gd-eclipse-labels {
+      position: absolute;
+      z-index: 5;
+      color: #fff;
+      font: bold 1.1cqw/1.35 sans-serif;
+      text-shadow: 0 0 3px #000, 1px 1px 0 #000;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #gd-eclipse-labels[hidden] {
+      display: none;
+    }
+
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
@@ -720,6 +987,1349 @@ self.onmessage = async ({ data: e }) => {
     self.postMessage({ id: e.id, error: String(t) });
   }
 };
+    </script>
+
+    <!-- Mod loader and built-in mods. -->
+    <script>
+    // Rewrites the game's wasm so chosen lifted functions call a JS hook first.
+    // Shared by the page (pasted into index.html) and node tests.
+    function createWasmPatcher() {
+      function readLeb(bytes, pos) {
+        let result = 0, shift = 0, byte;
+        do {
+          byte = bytes[pos++];
+          result += (byte & 127) * 2 ** shift;
+          shift += 7;
+        } while (byte & 128);
+        return [result, pos];
+      }
+      function uleb(value) {
+        const out = [];
+        do {
+          let byte = value % 128;
+          value = Math.floor(value / 128);
+          if (value) byte |= 128;
+          out.push(byte);
+        } while (value);
+        return out;
+      }
+      function sleb(value) {
+        const out = [];
+        for (;;) {
+          const byte = value & 127;
+          value >>= 7;
+          if ((value === 0 && !(byte & 64)) || (value === -1 && byte & 64)) {
+            out.push(byte);
+            return out;
+          }
+          out.push(byte | 128);
+        }
+      }
+      function sections(bytes) {
+        const list = [];
+        let pos = 8;
+        while (pos < bytes.length) {
+          const id = bytes[pos++];
+          let size;
+          [size, pos] = readLeb(bytes, pos);
+          list.push({ id, start: pos, size });
+          pos += size;
+        }
+        return list;
+      }
+      function analyze(bytes) {
+        const secs = sections(bytes),
+          sec = (id) => secs.find((s) => s.id === id);
+        let pos, count;
+        // Find the (i32, i32) -> i32 type used for the hook trampoline.
+        [count, pos] = readLeb(bytes, sec(1).start);
+        let hookType = -1;
+        for (let i = 0; i < count; i++) {
+          pos++;
+          let np, nr;
+          [np, pos] = readLeb(bytes, pos);
+          const params = Array.from(bytes.subarray(pos, pos + np));
+          pos += np;
+          [nr, pos] = readLeb(bytes, pos);
+          const results = Array.from(bytes.subarray(pos, pos + nr));
+          pos += nr;
+          if (hookType < 0 && params.join() === "127,127" && results.join() === "127") hookType = i;
+        }
+        // Imported function count (function indices start after them).
+        [count, pos] = readLeb(bytes, sec(2).start);
+        let importedFuncs = 0;
+        for (let i = 0; i < count; i++) {
+          let len;
+          [len, pos] = readLeb(bytes, pos);
+          pos += len;
+          [len, pos] = readLeb(bytes, pos);
+          pos += len;
+          const kind = bytes[pos++];
+          if (kind === 0) {
+            [, pos] = readLeb(bytes, pos);
+            importedFuncs++;
+          } else if (kind === 1) {
+            pos++;
+            const flags = bytes[pos++];
+            [, pos] = readLeb(bytes, pos);
+            if (flags & 1) [, pos] = readLeb(bytes, pos);
+          } else if (kind === 2) {
+            const flags = bytes[pos++];
+            [, pos] = readLeb(bytes, pos);
+            if (flags & 1) [, pos] = readLeb(bytes, pos);
+          } else if (kind === 3) {
+            pos += 2;
+          }
+        }
+        // Table size: the hook trampoline goes in the last (unused) slot.
+        pos = sec(4).start + 1;
+        pos++; // reftype
+        const tableFlags = bytes[pos++];
+        let tableMin;
+        [tableMin, pos] = readLeb(bytes, pos);
+        // Element segment: table slot -> function index.
+        pos = sec(9).start;
+        [count, pos] = readLeb(bytes, pos);
+        if (count !== 1 || bytes[pos] !== 0 || bytes[pos + 1] !== 0x41) throw new Error("unexpected element section");
+        let elemOffset;
+        [elemOffset, pos] = readLeb(bytes, pos + 2);
+        pos++;
+        [count, pos] = readLeb(bytes, pos);
+        const slotToFunc = new Uint32Array(elemOffset + count);
+        for (let i = 0; i < count; i++) [slotToFunc[elemOffset + i], pos] = readLeb(bytes, pos);
+        // Data segment 0 holds the lifter's sorted {guest address, ?, table slot, ?} records.
+        pos = sec(11).start;
+        [count, pos] = readLeb(bytes, pos);
+        pos += 2;
+        let dataBase, dataLen;
+        [dataBase, pos] = readLeb(bytes, pos);
+        pos++;
+        [dataLen, pos] = readLeb(bytes, pos);
+        const data = new DataView(bytes.buffer, bytes.byteOffset + pos, dataLen);
+        const addrToSlot = new Map();
+        let recordStart = -1;
+        for (let off = 0; off + 32 <= dataLen; off += 4) {
+          if (data.getUint32(off, true) === 0x401000 && data.getUint32(off + 8, true) === 1 && data.getUint32(off + 16, true) > 0x401000 && data.getUint32(off + 24, true) === 2) {
+            recordStart = off;
+            break;
+          }
+        }
+        if (recordStart < 0) throw new Error("function map not found");
+        for (let off = recordStart, prev = 0; off + 16 <= dataLen; off += 16) {
+          const addr = data.getUint32(off, true);
+          if (addr <= prev) break;
+          prev = addr;
+          addrToSlot.set(addr, data.getUint32(off + 8, true));
+        }
+        // Lifted code turns guest pointers into wasm addresses with
+        // `i32.const <membase ptr>; i32.load; i32.add`; the most common such
+        // constant at the start of the code section is that pointer.
+        const counts = new Map(),
+          codeSec = sec(10),
+          scanEnd = Math.min(codeSec.start + codeSec.size, codeSec.start + 8000000);
+        for (let p = codeSec.start; p < scanEnd; p++) {
+          if (bytes[p] !== 0x41) continue;
+          let value = 0, shift = 0, q = p + 1, byte;
+          do {
+            byte = bytes[q++];
+            value |= (byte & 127) << shift;
+            shift += 7;
+          } while (byte & 128 && shift < 35);
+          if (bytes[q] === 0x28 && bytes[q + 1] === 0x02 && bytes[q + 2] === 0x00 && bytes[q + 3] === 0x6a) {
+            counts.set(value, (counts.get(value) || 0) + 1);
+          }
+        }
+        let membasePtr = 0, best = 0;
+        for (const [value, n] of counts) if (n > best) [membasePtr, best] = [value, n];
+        // After every call, lifted code runs `if (i64.load(pendingFlag) != 0)
+        // runPending(cpu)` to finish tail jumps; find that flag and function.
+        const pendingCounts = new Map();
+        for (let p = codeSec.start; p < scanEnd; p++) {
+          if (bytes[p] !== 0x41) continue;
+          let flag = 0, shift = 0, q = p + 1, byte;
+          do {
+            byte = bytes[q++];
+            flag |= (byte & 127) << shift;
+            shift += 7;
+          } while (byte & 128 && shift < 35);
+          if (bytes[q] !== 0x29 || bytes[q + 1] !== 0x03 || bytes[q + 2] !== 0x00 || bytes[q + 3] !== 0x42 || bytes[q + 4] !== 0x00 || bytes[q + 5] !== 0x52 || bytes[q + 6] !== 0x04 || bytes[q + 7] !== 0x40 || bytes[q + 8] !== 0x20 || bytes[q + 9] !== 0x00 || bytes[q + 10] !== 0x10) continue;
+          const [func, end] = readLeb(bytes, q + 11);
+          if (bytes[end] !== 0x0b) continue;
+          const key = flag + ":" + func;
+          pendingCounts.set(key, (pendingCounts.get(key) || 0) + 1);
+        }
+        let pendingFlagPtr = 0, pendingFunc = -1;
+        best = 0;
+        for (const [key, n] of pendingCounts) {
+          if (n > best) {
+            best = n;
+            [pendingFlagPtr, pendingFunc] = key.split(":").map(Number);
+          }
+        }
+        return { secs, sec, hookType, importedFuncs, tableMin, tableFlags, slotToFunc, addrToSlot, membasePtr, pendingFlagPtr, pendingFunc };
+      }
+      // hookIds: Map(function index -> hook id). Returns new wasm bytes whose
+      // table has two extra slots: the pending-jump runner (so JS can finish
+      // tail jumps like lifted callers do) and the hook trampoline.
+      function patch(bytes, info, hookIds) {
+        const pendingSlot = info.tableMin,
+          trampolineSlot = info.tableMin + 1,
+          replaced = new Map();
+        // Table section: same single funcref table, two slots bigger.
+        const newTableSize = uleb(info.tableMin + 2);
+        replaced.set(4, [Uint8Array.from([1, 0x70, 1, ...newTableSize, ...newTableSize])]);
+        // Element section: the existing segment (which fills the table up to
+        // tableMin) gets the pending-jump runner appended.
+        const elem = info.sec(9);
+        let [, ep] = readLeb(bytes, elem.start);
+        ep += 2;
+        [, ep] = readLeb(bytes, ep);
+        ep++;
+        const [elemCount, elemItems] = readLeb(bytes, ep);
+        replaced.set(9, [
+          bytes.subarray(elem.start, ep),
+          Uint8Array.from(uleb(elemCount + 1)),
+          bytes.subarray(elemItems, elem.start + elem.size),
+          Uint8Array.from(uleb(info.pendingFunc)),
+        ]);
+        // Code section: prefix hooked bodies with `if (hook(ctx, id)) return;`.
+        const code = info.sec(10),
+          pieces = [];
+        let [count, pos] = readLeb(bytes, code.start);
+        pieces.push(Uint8Array.from(uleb(count)));
+        for (let i = 0; i < count; i++) {
+          let size;
+          const sizeStart = pos;
+          [size, pos] = readLeb(bytes, pos);
+          const hookId = hookIds.get(info.importedFuncs + i);
+          if (hookId === undefined) {
+            pieces.push(bytes.subarray(sizeStart, pos + size));
+          } else {
+            let p = pos, groups;
+            [groups, p] = readLeb(bytes, p);
+            for (let g = 0; g < groups; g++) {
+              [, p] = readLeb(bytes, p);
+              p++;
+            }
+            const prefix = Uint8Array.from([
+              0x20, 0x00, // local.get 0 (cpu context)
+              0x41, ...sleb(hookId),
+              0x41, ...sleb(trampolineSlot),
+              0x11, ...uleb(info.hookType), 0x00, // call_indirect
+              0x04, 0x40, 0x0f, 0x0b, // if return end
+            ]);
+            pieces.push(Uint8Array.from(uleb(size + prefix.length)));
+            pieces.push(bytes.subarray(pos, p), prefix, bytes.subarray(p, pos + size));
+          }
+          pos += size;
+        }
+        replaced.set(10, pieces);
+        const out = [bytes.subarray(0, 8)];
+        for (const s of info.secs) {
+          const body = replaced.get(s.id);
+          if (!body) {
+            out.push(Uint8Array.from([s.id, ...uleb(s.size)]), bytes.subarray(s.start, s.start + s.size));
+            continue;
+          }
+          const length = body.reduce((sum, piece) => sum + piece.length, 0);
+          out.push(Uint8Array.from([s.id, ...uleb(length)]), ...body);
+        }
+        const result = new Uint8Array(out.reduce((sum, piece) => sum + piece.length, 0));
+        let o = 0;
+        for (const piece of out) {
+          result.set(piece, o);
+          o += piece.length;
+        }
+        return { bytes: result, trampolineSlot, pendingSlot };
+      }
+      return { analyze, patch };
+    }
+    // Mod loader: hooks functions of the lifted game (GeometryDash.exe,
+    // libcocos2d.dll, libExtensions.dll recompiled to wasm) from JS.
+    //
+    // Each lifted function takes a pointer to the guest CPU state. Hooked
+    // functions are patched to start with `if (hook(cpu, id)) return;`, so a
+    // JS handler can read and change the arguments, skip the function, or run
+    // it and then look at the result. Function addresses are the Windows
+    // 2.2081 addresses from Geode's bindings (image base 0x140000000), rebased
+    // to where the port loads the game.
+    const GDModLoader = (window.GDModLoader = (function () {
+      const REG = {
+          rip: 192,
+          rax: 0, rcx: 8, rdx: 16, rbx: 24, rsp: 32, rbp: 40, rsi: 48, rdi: 56,
+          r8: 64, r9: 72, r10: 80, r11: 88, r12: 96, r13: 104, r14: 112, r15: 120,
+        },
+        XMM_BASE = 988,
+        XMM_STRIDE = 64,
+        CPU_STATE_SIZE = XMM_BASE + 16 * XMM_STRIDE,
+        INT_ARG_REGS = ["rcx", "rdx", "r8", "r9"],
+        // Any lifted address works as the fake return address of calls made from JS.
+        FAKE_RETURN_ADDRESS = 0x401000n,
+        hookEntries = [],
+        hooksByAddress = new Map(),
+        mods = [],
+        modsById = new Map(),
+        pendingTasks = [],
+        listeners = new Set(),
+        // Generated from Geode's 2.2081 bindings and libcocos2d's exports.
+        addresses = {
+          "cocos2d::CCScheduler::update": 0x100c2b60,
+          "cocos2d::CCDirector::sharedDirector": 0x100bfcc0,
+          "cocos2d::CCDirector::getWinSize": 0x100be710,
+          "cocos2d::CCMenu::create": 0x100592b0,
+          "cocos2d::CCMenu::addChild": 0x10057fa0,
+          "cocos2d::CCNode::addChild": 0x10002bc0,
+          "cocos2d::CCNode::setPosition": 0x10004d70,
+          "cocos2d::CCNode::setScale": 0x10004ed0,
+          "cocos2d::CCNode::setVisible": 0x10005100,
+          "MenuLayer::init": 0x733a90,
+          "MenuLayer::onMoreGames": 0x735740,
+          "ButtonSprite::create": 0x43f1c0,
+          "CCMenuItemSpriteExtra::create": 0x444bb0,
+          "cocos2d::CCDelayTime::create": 0x10033820,
+          "cocos2d::CCTransitionFade::create": 0x10052dd0,
+          "cocos2d::CCDrawNode::vtable": 0x100e6710,
+          "GJBaseGameLayer::update": 0x637850,
+          "GJBaseGameLayer::toggleFlipped": 0x6467d0,
+          "PlayLayer::destroyPlayer": 0x7b39d0,
+          "PlayLayer::updateProgressbar": 0x7b23c0,
+          "PlayLayer::getCurrentPercent": 0x7b3950,
+          "PlayLayer::resetLevel": 0x7b8eb0,
+          "PlayLayer::onQuit": 0x7babb0,
+          "PlayerObject::playDeathEffect": 0x77ef10,
+          "GameManager::isIconUnlocked": 0x57c500,
+          "GameManager::isColorUnlocked": 0x57c8e0,
+          "GameStatsManager::isItemUnlocked": 0x5e5820,
+          "GJGameLevel::savePercentage": 0x56c8b0,
+          "GameStatsManager::completedLevel": 0x5de3b0,
+          "GameStatsManager::awardCurrencyForLevel": 0x5e0960,
+          "GameStatsManager::awardDiamondsForLevel": 0x5e1140,
+          "GameStatsManager::completedDailyLevel": 0x5e2de0,
+          "GameStatsManager::completedMapPack": 0x5dee00,
+          "GameStatsManager::storeUserCoin": 0x5dfda0,
+          "GameStatsManager::storeSecretCoin": 0x5dfff0,
+          "GameStatsManager::setStarsForMapPack": 0x5df060,
+          "GameStatsManager::awardSecretKey": 0x5f19f0,
+          "GJBaseGameLayer::updateDebugDraw": 0x610800,
+        };
+      let instance = null,
+        table = null,
+        memory = null,
+        membasePtr = 0,
+        pendingFlagPtr = 0,
+        pendingSlot = 0,
+        addrToSlot = null,
+        view = null,
+        frameCpu = 0,
+        ready = false;
+      const loadErrors = [];
+
+      function dataView() {
+        if (!view || view.buffer !== memory.buffer) {
+          view = new DataView(memory.buffer);
+        }
+        return view;
+      }
+      // Guest (game) pointer -> offset in wasm memory.
+      function wasmAddr(guestPtr) {
+        const base = dataView().getUint32(membasePtr, true);
+        return (Number(BigInt.asUintN(32, BigInt(guestPtr))) + base) >>> 0;
+      }
+      const mem = {
+        u8: (p) => dataView().getUint8(wasmAddr(p)),
+        i32: (p) => dataView().getInt32(wasmAddr(p), true),
+        u32: (p) => dataView().getUint32(wasmAddr(p), true),
+        f32: (p) => dataView().getFloat32(wasmAddr(p), true),
+        f64: (p) => dataView().getFloat64(wasmAddr(p), true),
+        ptr: (p) => Number(dataView().getBigUint64(wasmAddr(p), true)),
+        setU8: (p, v) => dataView().setUint8(wasmAddr(p), v),
+        setI32: (p, v) => dataView().setInt32(wasmAddr(p), v, true),
+        setU32: (p, v) => dataView().setUint32(wasmAddr(p), v >>> 0, true),
+        setF32: (p, v) => dataView().setFloat32(wasmAddr(p), v, true),
+        setF64: (p, v) => dataView().setFloat64(wasmAddr(p), v, true),
+        setPtr: (p, v) => dataView().setBigUint64(wasmAddr(p), BigInt(v), true),
+        cString(p, max = 4096) {
+          let out = "";
+          for (let i = 0; i < max; i++) {
+            const c = mem.u8(p + i);
+            if (!c) break;
+            out += String.fromCharCode(c);
+          }
+          return out;
+        },
+        // MSVC std::string (gd::string): 16-byte SSO buffer, size, capacity.
+        gdString(p) {
+          const size = mem.u32(p + 16),
+            capacity = mem.u32(p + 24),
+            data = capacity >= 16 ? mem.ptr(p) : p;
+          let out = "";
+          for (let i = 0; i < Math.min(size, 65536); i++) {
+            out += String.fromCharCode(mem.u8(data + i));
+          }
+          return out;
+        },
+      };
+
+      // Register access for one CPU state.
+      function cpuView(cpu) {
+        const dv = dataView();
+        return {
+          get: (reg) => Number(dv.getBigUint64(cpu + REG[reg], true)),
+          getBig: (reg) => dv.getBigUint64(cpu + REG[reg], true),
+          set: (reg, v) => dv.setBigUint64(cpu + REG[reg], BigInt.asUintN(64, BigInt(v)), true),
+          xmmF32: (i) => dv.getFloat32(cpu + XMM_BASE + i * XMM_STRIDE, true),
+          xmmF64: (i) => dv.getFloat64(cpu + XMM_BASE + i * XMM_STRIDE, true),
+          setXmmF32: (i, v) => dv.setFloat32(cpu + XMM_BASE + i * XMM_STRIDE, v, true),
+          setXmmF64: (i, v) => dv.setFloat64(cpu + XMM_BASE + i * XMM_STRIDE, v, true),
+        };
+      }
+
+      function resolve(target) {
+        if (typeof target === "number") {
+          return target;
+        }
+        const address = addresses[target];
+        if (address === undefined) {
+          throw new Error("Unknown game function: " + target);
+        }
+        return address;
+      }
+
+      // Calls a lifted function from JS on the given CPU state. Arguments use
+      // the Windows x64 convention: ints/pointers in rcx, rdx, r8, r9 (then the
+      // stack), floats in xmm0-3 by position. Pass floats as {f32: v} or
+      // {f64: v}, C strings as {str: "text"}, CCPoint/CCSize references as
+      // {point: [x, y]}, menu selectors as {selector: "Class::method"} and raw
+      // structs as {bytes}; those are copied to the guest stack for the call.
+      function invoke(cpu, target, args = []) {
+        const address = resolve(target),
+          slot = addrToSlot.get(address);
+        if (!slot) {
+          throw new Error("Function is not available: " + target);
+        }
+        const saved = new Uint8Array(memory.buffer, cpu, CPU_STATE_SIZE).slice(),
+          regs = cpuView(cpu),
+          oldRsp = regs.getBig("rsp"),
+          // The callee's frame starts at `frame`; strings and points go in
+          // the scratch area between it and the caller's stack.
+          frame = (oldRsp - 0x1000n) & ~0xfn;
+        let scratch = frame + 0x100n;
+        function writeScratch(bytes) {
+          const at = scratch;
+          bytes.forEach((byte, i) => mem.setU8(at + BigInt(i), byte));
+          scratch = (scratch + BigInt(bytes.length) + 15n) & ~0xfn;
+          if (scratch > oldRsp - 0x40n) throw new Error("invoke arguments too large");
+          return at;
+        }
+        args = args.map((arg) => {
+          if (arg && typeof arg === "object" && "str" in arg) {
+            return writeScratch([...new TextEncoder().encode(arg.str), 0]);
+          }
+          if (arg && typeof arg === "object" && "point" in arg) {
+            const bytes = new Uint8Array(new Float32Array(arg.point).buffer);
+            return writeScratch([...bytes]);
+          }
+          if (arg && typeof arg === "object" && "bytes" in arg) {
+            return writeScratch([...arg.bytes]);
+          }
+          if (arg && typeof arg === "object" && "selector" in arg) {
+            // cocos2d SEL_* member pointers are plain 8-byte function addresses.
+            return BigInt(resolve(arg.selector));
+          }
+          return arg;
+        });
+        args.forEach((arg, i) => {
+          const isFloat = arg && typeof arg === "object";
+          if (i < 4) {
+            if (isFloat && "f32" in arg) regs.setXmmF32(i, arg.f32);
+            else if (isFloat) regs.setXmmF64(i, arg.f64);
+            else regs.set(INT_ARG_REGS[i], arg);
+          } else {
+            const slotAddr = frame + 0x20n + BigInt((i - 4) * 8);
+            if (isFloat && "f32" in arg) mem.setF32(slotAddr, arg.f32);
+            else if (isFloat) mem.setF64(slotAddr, arg.f64);
+            else mem.setPtr(slotAddr, typeof arg === "bigint" ? arg : BigInt(arg));
+          }
+        });
+        regs.set("rsp", frame - 8n);
+        mem.setPtr(frame - 8n, FAKE_RETURN_ADDRESS);
+        try {
+          runLifted(slot, cpu);
+          return {
+            value: regs.get("rax"),
+            int: Number(BigInt.asIntN(32, regs.getBig("rax"))),
+            f32: regs.xmmF32(0),
+            f64: regs.xmmF64(0),
+          };
+        } finally {
+          new Uint8Array(memory.buffer, cpu, CPU_STATE_SIZE).set(saved);
+        }
+      }
+
+      function emulateReturn(regs) {
+        const rsp = regs.getBig("rsp");
+        regs.set("rip", mem.ptr(rsp));
+        regs.set("rsp", rsp + 8n);
+      }
+
+      // Runs a lifted function, then finishes any tail jump it left pending
+      // (lifted callers do the same after every call).
+      function runLifted(slot, cpu) {
+        table.get(slot)(cpu);
+        if (dataView().getBigUint64(pendingFlagPtr, true) !== 0n) {
+          table.get(pendingSlot)(cpu);
+        }
+      }
+
+      class HookCall {
+        constructor(cpu, entry) {
+          this.cpu = cpu;
+          this.entry = entry;
+          this.regs = cpuView(cpu);
+          this.handled = false;
+        }
+        // Integer/pointer argument by position (0 is `this` for methods).
+        arg(i) {
+          return i < 4
+            ? this.regs.get(INT_ARG_REGS[i])
+            : mem.ptr(this.regs.getBig("rsp") + BigInt(8 * (i + 1)));
+        }
+        int(i) {
+          return i < 4
+            ? Number(BigInt.asIntN(32, this.regs.getBig(INT_ARG_REGS[i])))
+            : mem.i32(this.regs.getBig("rsp") + BigInt(8 * (i + 1)));
+        }
+        setArg(i, v) {
+          if (i < 4) this.regs.set(INT_ARG_REGS[i], v);
+          else mem.setPtr(this.regs.getBig("rsp") + BigInt(8 * (i + 1)), v);
+        }
+        float(i) {
+          return i < 4 ? this.regs.xmmF32(i) : mem.f32(this.regs.getBig("rsp") + BigInt(8 * (i + 1)));
+        }
+        setFloat(i, v) {
+          if (i < 4) this.regs.setXmmF32(i, v);
+          else mem.setF32(this.regs.getBig("rsp") + BigInt(8 * (i + 1)), v);
+        }
+        double(i) {
+          return this.regs.xmmF64(i);
+        }
+        // Return right away without running the game's function.
+        // Return right away (like the function's `ret`) without running it.
+        skip(returnValue = 0) {
+          if (this.handled) return;
+          this.regs.set("rax", returnValue);
+          emulateReturn(this.regs);
+          this.handled = true;
+        }
+        skipFloat(returnValue) {
+          if (this.handled) return;
+          this.regs.setXmmF32(0, returnValue);
+          emulateReturn(this.regs);
+          this.handled = true;
+        }
+        // Run the game's function now; afterwards the handler can read or
+        // change the return value with result()/setResult().
+        callOriginal() {
+          if (this.handled) return this.result();
+          this.entry.bypass = true;
+          runLifted(this.entry.slot, this.cpu);
+          this.handled = true;
+          return this.result();
+        }
+        result() {
+          return this.regs.get("rax");
+        }
+        resultFloat() {
+          return this.regs.xmmF32(0);
+        }
+        setResult(v) {
+          this.regs.set("rax", v);
+        }
+        setResultFloat(v) {
+          this.regs.setXmmF32(0, v);
+        }
+        invoke(target, args) {
+          return invoke(this.cpu, target, args);
+        }
+      }
+
+      function dispatch(cpu, id) {
+        const entry = hookEntries[id];
+        if (entry.bypass) {
+          entry.bypass = false;
+          return 0;
+        }
+        frameCpu = cpu;
+        let call = null;
+        for (const handler of entry.handlers) {
+          if (handler.mod && !handler.mod.enabled) continue;
+          call = call || new HookCall(cpu, entry);
+          try {
+            handler.fn(call, handler.mod);
+          } catch (hookError) {
+            console.error("[mods] " + (handler.mod ? handler.mod.id : "hook") + " failed in " + entry.name, hookError);
+            if (handler.mod) handler.mod.enabled = false;
+          }
+          if (call.handled) return 1;
+        }
+        return 0;
+      }
+
+      function hook(target, fn, mod = null) {
+        const name = typeof target === "string" ? target : "0x" + target.toString(16);
+        let entry = hooksByAddress.get(resolve(target));
+        if (!entry) {
+          if (instance) {
+            throw new Error("Hooks must be added before the game loads");
+          }
+          entry = { id: hookEntries.length, name, address: resolve(target), handlers: [], slot: 0, bypass: false };
+          hookEntries.push(entry);
+          hooksByAddress.set(entry.address, entry);
+        }
+        entry.handlers.push({ fn, mod });
+      }
+
+      // Runs fn(call) on the game thread at the next frame, with a CPU state
+      // that can be used to call game functions.
+      function runOnGameThread(fn) {
+        return new Promise((resolveTask, rejectTask) => pendingTasks.push({ fn, resolveTask, rejectTask }));
+      }
+
+      // Builds a 1-function module whose export forwards to a JS function,
+      // so it can live in the game's function table.
+      function makeTrampoline(fn) {
+        const bytes = Uint8Array.from([
+          0, 97, 115, 109, 1, 0, 0, 0,
+          1, 7, 1, 96, 2, 127, 127, 1, 127, // type (i32, i32) -> i32
+          2, 7, 1, 1, 101, 1, 104, 0, 0, // import "e" "h"
+          7, 5, 1, 1, 104, 0, 0, // export "h"
+        ]);
+        return new WebAssembly.Instance(new WebAssembly.Module(bytes), { e: { h: fn } }).exports.h;
+      }
+
+      // Replaces emscripten's wasm instantiation so hooks are patched in
+      // before any game code runs.
+      function attach(Module) {
+        Module.instantiateWasm = function (imports, done) {
+          let bytes = new Uint8Array(Module.wasmBinary),
+            trampolineSlot = 0;
+          try {
+            const patcher = createWasmPatcher(),
+              info = patcher.analyze(bytes),
+              hookIds = new Map();
+            addrToSlot = info.addrToSlot;
+            membasePtr = info.membasePtr;
+            pendingFlagPtr = info.pendingFlagPtr;
+            for (const entry of hookEntries) {
+              const slot = info.addrToSlot.get(entry.address);
+              if (!slot || info.hookType < 0) {
+                loadErrors.push(entry.name + " is not in this build");
+                entry.handlers.forEach((h) => h.mod && h.mod.loadErrors.push(entry.name));
+                continue;
+              }
+              entry.slot = slot;
+              hookIds.set(info.slotToFunc[slot], entry.id);
+            }
+            if (hookIds.size) {
+              ({ bytes, trampolineSlot, pendingSlot } = patcher.patch(bytes, info, hookIds));
+            }
+          } catch (patchError) {
+            console.error("[mods] Mods disabled: could not patch the game", patchError);
+            loadErrors.push(String(patchError));
+            hookEntries.length = 0;
+            bytes = new Uint8Array(Module.wasmBinary);
+          }
+          WebAssembly.instantiate(bytes, imports)
+            .then(({ instance: inst, module }) => {
+              instance = inst;
+              table = inst.exports.__indirect_function_table;
+              memory = inst.exports.memory;
+              if (trampolineSlot) {
+                table.set(trampolineSlot, makeTrampoline(dispatch));
+              }
+              ready = true;
+              done(inst, module);
+            })
+            .catch((instantiateError) => {
+              console.error("[mods] wasm instantiation failed", instantiateError);
+              Module.onAbort && Module.onAbort(instantiateError);
+            });
+          return {};
+        };
+      }
+
+      // Mods ---------------------------------------------------------------
+      function loadModState(id) {
+        try {
+          return JSON.parse(localStorage.getItem("gd-mod:" + id) || "null");
+        } catch (stateError) {
+          return null;
+        }
+      }
+      function saveModState(mod) {
+        try {
+          localStorage.setItem("gd-mod:" + mod.id, JSON.stringify({ enabled: mod.enabled, settings: mod.settings }));
+        } catch (stateError) {}
+      }
+      // def: { id, name, developer, description, enabledByDefault, settings:
+      // [{ id, name, description, type: "bool"|"float"|"int"|"choice"|"key", default, min, max, step, options }],
+      // setup(mod) -> called once before the game loads to add hooks }
+      function registerMod(def) {
+        const stored = loadModState(def.id) || {},
+          mod = {
+            ...def,
+            enabled: stored.enabled !== undefined ? stored.enabled : !!def.enabledByDefault,
+            settingDefs: def.settings || [],
+            settings: {},
+            loadErrors: [],
+          };
+        for (const setting of mod.settingDefs) {
+          if (!setting.id) continue;
+          mod.settings[setting.id] =
+            stored.settings && stored.settings[setting.id] !== undefined ? stored.settings[setting.id] : setting.default;
+        }
+        mod.hook = (target, fn) => hook(target, fn, mod);
+        mod.setEnabled = (enabled) => {
+          mod.enabled = !!enabled;
+          saveModState(mod);
+          if (def.onToggle) def.onToggle(mod);
+          listeners.forEach((l) => l(mod));
+        };
+        mod.setSetting = (key, value) => {
+          mod.settings[key] = value;
+          saveModState(mod);
+          if (def.onSettingChanged) def.onSettingChanged(mod, key, value);
+          listeners.forEach((l) => l(mod));
+        };
+        mods.push(mod);
+        modsById.set(mod.id, mod);
+        try {
+          if (def.setup) def.setup(mod);
+        } catch (setupError) {
+          console.error("[mods] setup failed for " + def.id, setupError);
+          mod.loadErrors.push(String(setupError));
+        }
+        return mod;
+      }
+
+      // Every frame the game runs CCScheduler::update; queued work and
+      // per-frame mod callbacks run there.
+      const frameCallbacks = [];
+      hook("cocos2d::CCScheduler::update", (call) => {
+        frameCpu = call.cpu;
+        for (const callback of frameCallbacks) {
+          if (callback.mod && !callback.mod.enabled) continue;
+          try {
+            callback.fn(call);
+          } catch (frameError) {
+            console.error("[mods] frame callback failed", frameError);
+          }
+        }
+        while (pendingTasks.length) {
+          const task = pendingTasks.shift();
+          try {
+            task.resolveTask(task.fn(call));
+          } catch (taskError) {
+            task.rejectTask(taskError);
+          }
+        }
+      });
+
+      return {
+        addresses,
+        // Extra {name, find, replace} edits for the game's JS glue (audio,
+        // input bridge); applied by the page together with its own patches.
+        gluePatches: [],
+        attach,
+        hook,
+        mem,
+        invoke: (target, args) => invoke(frameCpu, target, args),
+        runOnGameThread,
+        onFrame: (fn, mod = null) => frameCallbacks.push({ fn, mod }),
+        registerMod,
+        mods,
+        getMod: (id) => modsById.get(id),
+        onChange: (fn) => listeners.add(fn),
+        get ready() {
+          return ready;
+        },
+        loadErrors,
+      };
+    })());
+    // Mod menu: opened from the "Mods" button the loader adds to the game's
+    // main menu, the HUD button in levels, or Tab.
+    (function () {
+      const loader = GDModLoader;
+      let root = null,
+        list = null,
+        detail = null,
+        selectedId = null,
+        capturing = null;
+
+      function el(tag, props = {}, ...children) {
+        const node = document.createElement(tag);
+        for (const [key, value] of Object.entries(props)) {
+          if (key === "className") node.className = value;
+          else if (key === "text") node.textContent = value;
+          else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+          else node.setAttribute(key, value);
+        }
+        node.append(...children.filter((child) => child != null));
+        return node;
+      }
+
+      function keyName(code) {
+        return code.replace(/^(Key|Digit)/, "").replace(/^Arrow(.*)/, "$1 arrow");
+      }
+
+      function build() {
+        list = el("ul", { id: "gd-mods-list", role: "listbox", "aria-label": "Mods" });
+        detail = el("section", { id: "gd-mods-detail" });
+        root = el(
+          "div",
+          { id: "gd-mods", role: "dialog", "aria-modal": "true", "aria-labelledby": "gd-mods-title", hidden: "" },
+          el(
+            "div",
+            { id: "gd-mods-panel" },
+            el(
+              "div",
+              { id: "gd-mods-header" },
+              el("button", { type: "button", id: "gd-mods-back", text: "‹ Back", onclick: () => root.classList.remove("gd-mods-showing-detail") }),
+              el("h2", { id: "gd-mods-title", text: "Mods" }),
+              el("span", { className: "gd-mods-count" }),
+              el("button", { type: "button", text: "Done", onclick: close }),
+            ),
+            el("div", { id: "gd-mods-body" }, list, detail),
+          ),
+        );
+        root.addEventListener("click", (event) => {
+          if (event.target === root) close();
+        });
+        document.getElementById("gd-stage").appendChild(root);
+      }
+
+      function renderList() {
+        list.replaceChildren();
+        for (const mod of loader.mods) {
+          const toggle = el("input", {
+            type: "checkbox",
+            className: "gd-switch",
+            "aria-label": "Enable " + mod.name,
+            onclick: (event) => event.stopPropagation(),
+            onchange: (event) => {
+              mod.setEnabled(event.target.checked);
+              render();
+            },
+          });
+          toggle.checked = mod.enabled;
+          list.appendChild(
+            el(
+              "li",
+              {
+                role: "option",
+                "aria-selected": String(mod.id === selectedId),
+                onclick: () => {
+                  selectedId = mod.id;
+                  root.classList.add("gd-mods-showing-detail");
+                  render();
+                },
+              },
+              el("div", { className: "gd-mod-name" }, mod.name, el("small", { text: mod.developer ? "by " + mod.developer : "" })),
+              toggle,
+            ),
+          );
+        }
+        root.querySelector(".gd-mods-count").textContent =
+          loader.mods.filter((mod) => mod.enabled).length + " of " + loader.mods.length + " enabled";
+      }
+
+      function renderSetting(mod, setting) {
+        if (setting.type === "title") {
+          return el("div", { className: "gd-mod-setting-title", text: setting.name });
+        }
+        const value = mod.settings[setting.id],
+          label = el("div", { className: "gd-mod-setting-label" }, setting.name, setting.description ? el("small", { text: setting.description }) : null),
+          row = el("div", { className: "gd-mod-setting" }, label);
+        if (setting.type === "bool") {
+          const input = el("input", { type: "checkbox", className: "gd-switch", "aria-label": setting.name, onchange: (e) => mod.setSetting(setting.id, e.target.checked) });
+          input.checked = !!value;
+          row.appendChild(input);
+        } else if (setting.type === "float" || setting.type === "int") {
+          const step = setting.step || (setting.type === "int" ? 1 : 0.01),
+            number = el("input", { type: "number", min: setting.min, max: setting.max, step, "aria-label": setting.name }),
+            range = el("input", { type: "range", min: setting.min, max: setting.max, step, "aria-label": setting.name });
+          number.value = range.value = value;
+          const commit = (raw) => {
+            let next = setting.type === "int" ? parseInt(raw, 10) : parseFloat(raw);
+            if (!Number.isFinite(next)) return;
+            next = Math.min(setting.max, Math.max(setting.min, next));
+            number.value = range.value = next;
+            mod.setSetting(setting.id, next);
+          };
+          range.addEventListener("input", (e) => commit(e.target.value));
+          number.addEventListener("change", (e) => commit(e.target.value));
+          row.append(range, number);
+        } else if (setting.type === "choice") {
+          const select = el("select", { "aria-label": setting.name, onchange: (e) => mod.setSetting(setting.id, e.target.value) });
+          for (const option of setting.options) {
+            const node = el("option", { value: option.value, text: option.name });
+            node.selected = option.value === value;
+            select.appendChild(node);
+          }
+          row.appendChild(select);
+        } else if (setting.type === "key") {
+          const button = el("button", {
+            type: "button",
+            text: capturing === setting ? "Press a key… (Backspace clears)" : value ? keyName(value) : "None",
+            onclick: () => {
+              capturing = capturing === setting ? null : setting;
+              render();
+            },
+          });
+          row.appendChild(button);
+        } else if (setting.type === "button") {
+          row.appendChild(el("button", { type: "button", text: setting.label || setting.name, onclick: () => setting.action(mod) }));
+        } else if (setting.type === "custom") {
+          row.replaceChildren();
+          row.style.display = "block";
+          setting.render(row, mod);
+        }
+        return row;
+      }
+
+      function renderDetail() {
+        detail.replaceChildren();
+        const mod = loader.getMod(selectedId) || loader.mods[0];
+        if (!mod) {
+          detail.appendChild(el("p", { text: "No mods installed." }));
+          return;
+        }
+        selectedId = mod.id;
+        detail.append(
+          el("h3", { text: mod.name }),
+          el("p", { className: "gd-mod-meta", text: [mod.developer && "by " + mod.developer, mod.version].filter(Boolean).join(" · ") }),
+        );
+        if (mod.loadErrors.length) {
+          detail.appendChild(el("p", { className: "gd-mod-warning", text: "Some features are unavailable in this game build: " + mod.loadErrors.join(", ") }));
+        }
+        if (mod.description) {
+          detail.appendChild(el("p", { className: "gd-mod-description", text: mod.description }));
+        }
+        for (const setting of mod.settingDefs || []) {
+          detail.appendChild(renderSetting(mod, setting));
+        }
+      }
+
+      function render() {
+        if (!root || root.hidden) return;
+        renderList();
+        renderDetail();
+      }
+
+      function open() {
+        if (!root) build();
+        window.__gdModsOpen = true;
+        root.hidden = false;
+        capturing = null;
+        render();
+        root.querySelector("#gd-mods-header button:last-child").focus();
+      }
+
+      function close() {
+        if (!root || root.hidden) return;
+        window.__gdModsOpen = false;
+        capturing = null;
+        root.hidden = true;
+        try {
+          document.getElementById("canvas").focus({ preventScroll: true });
+        } catch (focusError) {}
+      }
+
+      loader.openMenu = open;
+      loader.closeMenu = close;
+      loader.onChange(() => render());
+
+      window.addEventListener(
+        "keydown",
+        (event) => {
+          if (window.__gdModsOpen && capturing) {
+            event.preventDefault();
+            event.stopPropagation();
+            const mod = loader.getMod(selectedId);
+            if (event.code === "Backspace") mod.setSetting(capturing.id, "");
+            else if (event.code !== "Escape") mod.setSetting(capturing.id, event.code);
+            capturing = null;
+            render();
+            return;
+          }
+          const typing = event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
+          if (event.code === "Tab" && !typing && window.__gdInputReady && !window.__gdKeybindsOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            window.__gdModsOpen ? close() : open();
+          } else if (event.code === "Escape" && window.__gdModsOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+          }
+        },
+        true,
+      );
+
+      // HUD button (shown in levels next to pause).
+      const hud = document.getElementById("gd-hud");
+      if (hud) {
+        const button = el("button", { type: "button", id: "gd-mods-open", title: "Mods (Tab)", "aria-label": "Mods", onclick: open });
+        button.innerHTML =
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3a2 2 0 0 1 4 0v2h4a1 1 0 0 1 1 1v4h-2a2 2 0 0 0 0 4h2v4a1 1 0 0 1-1 1h-4v-2a2 2 0 0 0-4 0v2H6a1 1 0 0 1-1-1v-4h2a2 2 0 0 0 0-4H5V6a1 1 0 0 1 1-1h4V3z"/></svg>';
+        hud.insertBefore(button, hud.firstChild);
+      }
+
+      // "Mods" button on the game's main menu. Clicks are routed through a
+      // hook on MenuLayer::onMoreGames, which the button uses as its callback.
+      let menuButton = 0;
+      loader.hook("MenuLayer::init", (call) => {
+        const layer = call.arg(0);
+        call.callOriginal();
+        try {
+          const director = call.invoke("cocos2d::CCDirector::sharedDirector").value,
+            sizePtr = call.invoke("cocos2d::CCDirector::getWinSize", [director, { point: [0, 0] }]).value,
+            width = loader.mem.f32(sizePtr),
+            height = loader.mem.f32(sizePtr + 4),
+            sprite = call.invoke("ButtonSprite::create", [{ str: "Mods" }, 0, 0, { f32: 0.7 }, 0, { str: "goldFont.fnt" }, { str: "GJ_button_01.png" }, { f32: 30 }]).value,
+            item = call.invoke("CCMenuItemSpriteExtra::create", [sprite, 0, layer, { selector: "MenuLayer::onMoreGames" }]).value,
+            menu = call.invoke("cocos2d::CCMenu::create").value;
+          call.invoke("cocos2d::CCMenu::addChild", [menu, item]);
+          call.invoke("cocos2d::CCNode::setPosition", [menu, { point: [width - 45, height - 22] }]);
+          call.invoke("cocos2d::CCNode::addChild", [layer, menu, 10]);
+          menuButton = item;
+        } catch (buttonError) {
+          console.warn("[mods] Could not add the Mods button to the main menu", buttonError);
+        }
+      });
+      loader.hook("MenuLayer::onMoreGames", (call) => {
+        if (menuButton && call.arg(1) === menuButton) {
+          call.skip();
+          setTimeout(open, 0);
+        }
+      });
+    })();
+    // Eclipse Menu (web port): the commonly used hacks, labels and shortcuts
+    // from the Eclipse Menu Geode mod, rebuilt on the web mod loader.
+    (function () {
+      const loader = GDModLoader,
+        mem = loader.mem,
+        UNLOCK_GJ_ITEM = 12,
+        PRACTICE_MUSIC_ITEM = 17,
+        level = {
+          layer: 0,
+          lastSeen: 0,
+          attempts: 0,
+          frames: 0,
+          deathFrames: 0,
+          deaths: 0,
+          diedThisFrame: false,
+          percent: 0,
+        },
+        clickTimes = [],
+        frameTimes = [],
+        sessionStart = Date.now();
+      let fields = null,
+        inDestroyPlayer = false,
+        labelBox = null;
+
+      const s = () => mod.settings;
+      const isCheating = () => {
+        const settings = s();
+        return settings.noclip || (settings.speedhack && settings.speed !== 1) || settings.showHitboxes || settings.noMirror;
+      };
+      const safeModeActive = () => mod.enabled && (s().safeMode || (s().autoSafeMode && isCheating()));
+
+      // GJBaseGameLayer's m_debugDrawNode is followed by m_debugDrawPoints,
+      // m_isDebugDrawEnabled, m_disablePlayerHitbox, m_hitboxesOnDeath and
+      // m_anticheatSpike. Find the draw node by its vtable.
+      function findFields(layer) {
+        const vtable = loader.addresses["cocos2d::CCDrawNode::vtable"],
+          limit = Module.HEAPU8.length - 16;
+        for (let offset = 0x400; offset < 0x8000; offset += 8) {
+          const p = mem.ptr(layer + offset);
+          if (p > 0x10000 && p < limit && p % 8 === 0 && mem.ptr(p) === vtable) {
+            return {
+              debugDrawNode: offset,
+              debugDrawEnabled: offset + 16,
+              hitboxesOnDeath: offset + 18,
+              anticheatSpike: offset + 24,
+            };
+          }
+        }
+        return null;
+      }
+
+      function setAudioSpeed(next) {
+        const audio = Module.__gdAudio,
+          current = Module.__gdAudioSpeed || 1;
+        if (next === current) return;
+        if (audio && audio.ctx) {
+          // Keep each playing sound at its current position while the rate changes.
+          for (const channel of Object.values(audio.channels)) {
+            if (channel.src && channel.when && !channel.paused && !channel.pausedByGroup) {
+              channel.base = audio.chPos(channel);
+              channel.when = audio.ctx.currentTime;
+            }
+          }
+        }
+        Module.__gdAudioSpeed = next;
+        if (audio) {
+          for (const channel of Object.values(audio.channels)) {
+            if (channel.src) channel.src.playbackRate.value = channel.pitch * next;
+          }
+        }
+      }
+
+      const audioSpeed = "*(Module.__gdAudioSpeed||1)";
+      loader.gluePatches.push(
+        { name: "Speedhack audio position", find: "var t=(ctx.currentTime-ch.when)*ch.pitch*1e3+ch.base;", replace: "var t=(ctx.currentTime-ch.when)*ch.pitch" + audioSpeed + "*1e3+ch.base;" },
+        { name: "Speedhack audio start", find: "src.loop=!!ch.loop;src.playbackRate.value=ch.pitch;", replace: "src.loop=!!ch.loop;src.playbackRate.value=ch.pitch" + audioSpeed + ";" },
+        { name: "Speedhack audio seek", find: "src2.loop=!!c.loop;src2.playbackRate.value=c.pitch;", replace: "src2.loop=!!c.loop;src2.playbackRate.value=c.pitch" + audioSpeed + ";" },
+        { name: "Speedhack audio pitch", find: "c.pitch=f;if(c.src)c.src.playbackRate.value=f}", replace: "c.pitch=f;if(c.src)c.src.playbackRate.value=f" + audioSpeed + "}" },
+      );
+
+      const mod = loader.registerMod({
+        id: "eclipse.eclipse-menu",
+        name: "Eclipse Menu",
+        developer: "Eclipse Team (web port)",
+        version: "web 1.0",
+        description:
+          "Hacks, labels and shortcuts from Eclipse Menu. Cheats like noclip and speedhack turn on safe mode automatically, so they can't save progress (you can change this below).",
+        settings: [
+          { type: "title", name: "Global" },
+          { id: "speedhack", type: "bool", name: "Speedhack", default: false },
+          { id: "speed", type: "float", name: "Speed", min: 0.1, max: 10, step: 0.05, default: 1 },
+          { id: "speedhackAudio", type: "bool", name: "Speed up audio too", default: true },
+          { id: "noTransition", type: "bool", name: "No transitions", description: "Skip the fade between menus.", default: false },
+          { id: "safeMode", type: "bool", name: "Safe mode", description: "Never save progress or rewards.", default: false },
+          { id: "autoSafeMode", type: "bool", name: "Auto safe mode", description: "Safe mode while noclip, speedhack, hitboxes or no mirror are on.", default: true },
+          { type: "title", name: "Level" },
+          { id: "noclip", type: "bool", name: "Noclip", description: "You can't die.", default: false },
+          { id: "showHitboxes", type: "bool", name: "Show hitboxes", default: false },
+          { id: "hitboxesOnDeath", type: "bool", name: "Show hitboxes on death", default: false },
+          { id: "noDeathEffect", type: "bool", name: "No death effect", default: false },
+          { id: "respawnDelayEnabled", type: "bool", name: "Custom respawn delay", default: false },
+          { id: "respawnDelay", type: "float", name: "Respawn delay (seconds)", min: 0, max: 2, step: 0.05, default: 0.5 },
+          { id: "practiceMusic", type: "bool", name: "Practice music hack", description: "Play the level's song in practice mode.", default: false },
+          { id: "noMirror", type: "bool", name: "No mirror", description: "Ignore mirror portals.", default: false },
+          { type: "title", name: "Player" },
+          { id: "unlockIcons", type: "bool", name: "Unlock all icons and colors", default: false },
+          { type: "title", name: "Labels" },
+          { id: "labels", type: "bool", name: "Show labels", default: false },
+          { id: "labelCorner", type: "choice", name: "Position", default: "tl", options: [
+            { value: "tl", name: "Top left" }, { value: "tr", name: "Top right" },
+            { value: "bl", name: "Bottom left" }, { value: "br", name: "Bottom right" },
+          ] },
+          { id: "labelScale", type: "float", name: "Size", min: 0.5, max: 2, step: 0.05, default: 1 },
+          { id: "labelOpacity", type: "float", name: "Opacity", min: 0.1, max: 1, step: 0.05, default: 0.7 },
+          { id: "labelCheat", type: "bool", name: "Cheat indicator", default: true },
+          { id: "labelFps", type: "bool", name: "FPS", default: true },
+          { id: "labelCps", type: "bool", name: "Clicks per second", default: false },
+          { id: "labelAttempts", type: "bool", name: "Attempts", default: false },
+          { id: "labelPercent", type: "bool", name: "Accurate percentage", default: false },
+          { id: "labelNoclip", type: "bool", name: "Noclip accuracy and deaths", default: true },
+          { id: "labelClock", type: "bool", name: "Clock", default: false },
+          { id: "labelSession", type: "bool", name: "Session time", default: false },
+          { type: "title", name: "Shortcuts" },
+          { id: "keyNoclip", type: "key", name: "Toggle noclip", default: "" },
+          { id: "keySpeedhack", type: "key", name: "Toggle speedhack", default: "" },
+          { id: "keyHitboxes", type: "key", name: "Toggle hitboxes", default: "" },
+        ],
+        setup(mod) {
+          const settings = mod.settings;
+
+          mod.hook("cocos2d::CCScheduler::update", (call) => {
+            frameTimes.push(performance.now());
+            setAudioSpeed(settings.speedhack && settings.speedhackAudio ? settings.speed : 1);
+            if (settings.speedhack) call.setFloat(1, call.float(1) * settings.speed);
+          });
+
+          mod.hook("PlayLayer::destroyPlayer", (call) => {
+            const layer = call.arg(0),
+              object = call.arg(2);
+            fields = fields || findFields(layer);
+            const isAnticheat = fields && object && object === mem.ptr(layer + fields.anticheatSpike);
+            if (!isAnticheat) level.diedThisFrame = true;
+            if (settings.noclip && !isAnticheat) {
+              level.deaths++;
+              call.skip();
+              return;
+            }
+            inDestroyPlayer = true;
+            try {
+              call.callOriginal();
+            } finally {
+              inDestroyPlayer = false;
+            }
+          });
+          mod.hook("cocos2d::CCDelayTime::create", (call) => {
+            if (inDestroyPlayer && settings.respawnDelayEnabled) call.setFloat(0, settings.respawnDelay);
+          });
+          mod.hook("PlayerObject::playDeathEffect", (call) => {
+            if (settings.noDeathEffect) call.skip();
+          });
+
+          mod.hook("GJBaseGameLayer::update", (call) => {
+            const layer = call.arg(0);
+            if (layer === level.layer) {
+              level.frames++;
+              if (level.diedThisFrame) level.deathFrames++;
+              level.diedThisFrame = false;
+            }
+            if ((settings.showHitboxes || settings.hitboxesOnDeath) && layer === level.layer) {
+              fields = fields || findFields(layer);
+              if (fields) {
+                if (settings.showHitboxes) mem.setU8(layer + fields.debugDrawEnabled, 1);
+                if (settings.hitboxesOnDeath) mem.setU8(layer + fields.hitboxesOnDeath, 1);
+                call.callOriginal();
+                // Outside practice mode the game never redraws hitboxes itself.
+                const node = mem.ptr(layer + fields.debugDrawNode);
+                if (node && settings.showHitboxes) {
+                  call.invoke("GJBaseGameLayer::updateDebugDraw", [layer]);
+                  call.invoke("cocos2d::CCNode::setVisible", [node, 1]);
+                }
+              }
+            }
+          });
+
+          mod.hook("PlayLayer::updateProgressbar", (call) => {
+            const layer = call.arg(0);
+            if (layer !== level.layer) {
+              Object.assign(level, { layer, attempts: 0, frames: 0, deathFrames: 0, deaths: 0 });
+            }
+            level.lastSeen = Date.now();
+            if (settings.labels && settings.labelPercent) {
+              call.callOriginal();
+              level.percent = call.invoke("PlayLayer::getCurrentPercent", [layer]).f32;
+            }
+          });
+          mod.hook("PlayLayer::resetLevel", (call) => {
+            if (call.arg(0) === level.layer) level.attempts++;
+            level.frames = level.deathFrames = level.deaths = 0;
+          });
+          mod.hook("PlayLayer::onQuit", () => {
+            level.layer = 0;
+          });
+
+          mod.hook("GJBaseGameLayer::toggleFlipped", (call) => {
+            if (settings.noMirror) call.skip();
+          });
+          mod.hook("cocos2d::CCTransitionFade::create", (call) => {
+            if (settings.noTransition) call.setFloat(0, 0);
+          });
+          mod.hook("GameManager::isIconUnlocked", (call) => {
+            if (settings.unlockIcons) call.skip(1);
+          });
+          mod.hook("GameManager::isColorUnlocked", (call) => {
+            if (settings.unlockIcons) call.skip(1);
+          });
+          mod.hook("GameStatsManager::isItemUnlocked", (call) => {
+            if (settings.practiceMusic && call.int(1) === UNLOCK_GJ_ITEM && call.int(2) === PRACTICE_MUSIC_ITEM) call.skip(1);
+          });
+
+          // Safe mode: block everything that saves level progress or rewards.
+          for (const name of [
+            "GJGameLevel::savePercentage",
+            "GameStatsManager::completedLevel",
+            "GameStatsManager::awardCurrencyForLevel",
+            "GameStatsManager::awardDiamondsForLevel",
+            "GameStatsManager::completedDailyLevel",
+            "GameStatsManager::completedMapPack",
+            "GameStatsManager::storeUserCoin",
+            "GameStatsManager::storeSecretCoin",
+            "GameStatsManager::setStarsForMapPack",
+            "GameStatsManager::awardSecretKey",
+          ]) {
+            mod.hook(name, (call) => {
+              if (safeModeActive()) call.skip(0);
+            });
+          }
+        },
+      });
+
+      function formatTime(ms) {
+        const total = Math.floor(ms / 1000),
+          h = Math.floor(total / 3600),
+          m = Math.floor((total % 3600) / 60),
+          sec = total % 60;
+        return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+      }
+
+      function updateLabels() {
+        const settings = s(),
+          now = performance.now();
+        while (frameTimes.length && now - frameTimes[0] > 1000) frameTimes.shift();
+        while (clickTimes.length && now - clickTimes[0] > 1000) clickTimes.shift();
+        if (!mod.enabled || !settings.labels || !window.__gdInputReady) {
+          if (labelBox) labelBox.hidden = true;
+          return;
+        }
+        if (!labelBox) {
+          labelBox = document.createElement("div");
+          labelBox.id = "gd-eclipse-labels";
+          labelBox.setAttribute("aria-hidden", "true");
+          document.getElementById("gd-frame").appendChild(labelBox);
+        }
+        const inLevel = level.layer && Date.now() - level.lastSeen < 1000,
+          lines = [];
+        if (settings.labelCheat) {
+          lines.push(
+            isCheating()
+              ? '<span style="color:#ff6b6b">Cheating' + (safeModeActive() ? " (safe mode)" : "") + "</span>"
+              : safeModeActive()
+                ? '<span style="color:#ffd76b">Safe mode</span>'
+                : '<span style="color:#7dff7d">No cheats</span>',
+          );
+        }
+        if (settings.labelFps) lines.push(frameTimes.length + " FPS");
+        if (settings.labelCps) lines.push(clickTimes.length + " CPS");
+        if (inLevel && settings.labelAttempts) lines.push("Attempt " + level.attempts);
+        if (inLevel && settings.labelPercent) lines.push(level.percent.toFixed(2) + "%");
+        if (inLevel && settings.labelNoclip && settings.noclip) {
+          const accuracy = level.frames ? 100 * (1 - level.deathFrames / level.frames) : 100;
+          lines.push("Accuracy " + accuracy.toFixed(2) + "% · " + level.deaths + " deaths");
+        }
+        if (settings.speedhack && settings.speed !== 1) lines.push("Speed " + settings.speed + "×");
+        if (settings.labelClock) lines.push(new Date().toLocaleTimeString());
+        if (settings.labelSession) lines.push("Session " + formatTime(Date.now() - sessionStart));
+        const corner = settings.labelCorner || "tl";
+        labelBox.style.cssText =
+          (corner[0] === "t" ? "top:" : "bottom:") + "1cqw;" +
+          (corner[1] === "l" ? "left:1cqw;text-align:left;" : "right:1cqw;text-align:right;") +
+          "opacity:" + settings.labelOpacity + ";font-size:calc(1.1cqw * " + settings.labelScale + ");";
+        labelBox.innerHTML = lines.join("<br>");
+        labelBox.hidden = !lines.length;
+      }
+      setInterval(updateLabels, 100);
+
+      function countClick(event) {
+        if (!window.__gdInputReady || window.__gdModsOpen || (event.type === "keydown" && event.repeat)) return;
+        if (event.type === "keydown" && !["Space", "ArrowUp", "KeyW"].includes(event.code)) return;
+        clickTimes.push(performance.now());
+      }
+      window.addEventListener("mousedown", countClick, true);
+      window.addEventListener("touchstart", countClick, { capture: true, passive: true });
+      window.addEventListener("keydown", countClick, true);
+
+      window.addEventListener(
+        "keydown",
+        (event) => {
+          if (!mod.enabled || event.repeat || window.__gdModsOpen || window.__gdKeybindsOpen) return;
+          if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+          const settings = s();
+          for (const [key, setting] of [["keyNoclip", "noclip"], ["keySpeedhack", "speedhack"], ["keyHitboxes", "showHitboxes"]]) {
+            if (settings[key] && event.code === settings[key]) mod.setSetting(setting, !settings[setting]);
+          }
+        },
+        true,
+      );
+    })();
     </script>
 
     <!-- Main script: network shim, input handling, save restore, game loader. -->
@@ -2100,6 +3710,7 @@ self.onmessage = async ({ data: e }) => {
       brotliWorker.terminate();
       setLoadingProgress(96);
       Module.wasmBinary = wasmBinary;
+      GDModLoader.attach(Module);
       Module.getPreloadedPackage = () => dataPackage;
       const scriptEl = document.createElement("script");
       let patchedGlue = new TextDecoder().decode(glueScript);
@@ -2125,7 +3736,7 @@ self.onmessage = async ({ data: e }) => {
           replace: "/^S-1-5-21-\\d+-\\d+-\\d+-1001$/",
         },
       ];
-      for (const patch of gluePatches) {
+      for (const patch of gluePatches.concat(window.GDModLoader ? GDModLoader.gluePatches : [])) {
         const matchCount = patchedGlue.split(patch.find).length - 1;
         if (matchCount === 1) {
           patchedGlue = patchedGlue.replace(patch.find, () => patch.replace);
@@ -2486,7 +4097,7 @@ self.onmessage = async ({ data: e }) => {
       };
       Module.gdKeyState = new Uint8Array(256);
       function handleKey(keyEvent, isDown) {
-        if (!isInputReady() || window.__gdKeybindsOpen) {
+        if (!isInputReady() || window.__gdKeybindsOpen || window.__gdModsOpen) {
           return;
         }
         try {
