@@ -4262,6 +4262,7 @@ self.onmessage = async ({ data: e }) => {
           twoPlayerMode: false,
           deathlink: false,
           switcheroo: false,
+          lockedTeams: false,
         };
       }
       function sanitizeSettings(input) {
@@ -4315,13 +4316,17 @@ self.onmessage = async ({ data: e }) => {
         closeRoom: () => send({ t: "closeRoom" }),
         kick: (id) => send({ t: "kick", id }),
         updateRoomSettings: (settings) => send({ t: "roomSettings", settings }),
+        createTeam: (color) => send({ t: "createTeam", color }),
+        deleteTeam: (id) => send({ t: "deleteTeam", id }),
+        updateTeam: (id, color) => send({ t: "updateTeam", id, color }),
+        assignTeam: (player, team) => send({ t: "assignTeam", player, team }),
         requestRoomState: () => send({ t: "requestRoomState" }),
         requestRoomList: (filter = "", page = 0) => send({ t: "requestRoomList", filter, page }),
         invite: (id) => send({ t: "invite", to: id }),
         isOwner: () => net.room.id !== 0 && net.room.owner === net.myId,
       };
       function emptyRoom() {
-        return { id: 0, name: "Global Room", owner: "", ownerName: "", pinned: "", passcode: 0, settings: defaultSettings(), players: [], playerCount: 0 };
+        return { id: 0, name: "Global Room", owner: "", ownerName: "", pinned: "", teams: [], passcode: 0, settings: defaultSettings(), players: [], playerCount: 0 };
       }
       function setState(state, status = "") {
         net.state = state;
@@ -4528,6 +4533,7 @@ self.onmessage = async ({ data: e }) => {
               owner: msg.owner,
               ownerName: msg.ownerName || "",
               pinned: msg.pinned || "",
+              teams: msg.teams || [],
               passcode: msg.passcode || (msg.id === net.room.id ? net.room.passcode : 0),
               settings: sanitizeSettings(msg.settings),
               players: msg.players || [],
@@ -4618,8 +4624,10 @@ self.onmessage = async ({ data: e }) => {
           return rooms.get(session.roomId) || rooms.get(0);
         }
         function playerInfo(session) {
-          const profile = session.profile || {};
+          const profile = session.profile || {},
+            room = rooms.get(session.roomId);
           return {
+            team: room && room.teamOf ? room.teamOf.get(session.id) ?? -1 : -1,
             id: session.id,
             name: profile.name || "Player",
             accountId: profile.accountId || 0,
@@ -4643,6 +4651,7 @@ self.onmessage = async ({ data: e }) => {
             settings: room.settings,
             passcode: session.id === room.owner ? room.passcode : 0,
             pinned: room.pinned || "",
+            teams: room.settings.teams ? room.teams || [] : [],
             players: members.slice(0, 250).map(playerInfo),
             playerCount: members.length,
           };
@@ -4887,6 +4896,33 @@ self.onmessage = async ({ data: e }) => {
             case "emote":
               if (session.level) forwardToLevel(session, Object.assign({}, msg, { id: session.id }));
               break;
+            case "createTeam":
+            case "deleteTeam":
+            case "updateTeam":
+            case "assignTeam": {
+              const room = roomOf(session);
+              if (room.id === 0 || !room.settings.teams) return;
+              room.teams = room.teams || [];
+              room.teamOf = room.teamOf || new Map();
+              const owner = room.owner === session.id;
+              if (msg.t === "createTeam" && owner && room.teams.length < 100) room.teams.push({ color: (msg.color || [255, 255, 255]).slice(0, 3) });
+              if (msg.t === "deleteTeam" && owner && room.teams[msg.id]) {
+                room.teams.splice(msg.id, 1);
+                for (const [id, team] of room.teamOf) {
+                  if (team === msg.id) room.teamOf.delete(id);
+                  else if (team > msg.id) room.teamOf.set(id, team - 1);
+                }
+              }
+              if (msg.t === "updateTeam" && owner && room.teams[msg.id]) room.teams[msg.id].color = (msg.color || [255, 255, 255]).slice(0, 3);
+              if (msg.t === "assignTeam" && room.teams[msg.team]) {
+                const target = msg.player || session.id;
+                if (target !== session.id && !owner) return;
+                if (target === session.id && room.settings.lockedTeams && !owner) return;
+                room.teamOf.set(target, msg.team);
+              }
+              markDirty(room);
+              break;
+            }
             case "requestPlayers": {
               const room = roomOf(session),
                 players = [...sessions.values()].filter((other) => other !== session && other.roomId !== room.id).slice(0, 200).map(playerInfo);
@@ -5111,7 +5147,13 @@ self.onmessage = async ({ data: e }) => {
           clearVisuals();
         }
       });
-      const profileKey = (player) => JSON.stringify([player.name, player.icons, player.color1, player.color2, player.glow]);
+      const profileKey = (player) => JSON.stringify([player.name, player.icons, player.color1, player.color2, player.glow, teamOf(player)]);
+      // Team color (when the room has teams), or null.
+      function teamOf(player) {
+        const room = net.room,
+          team = room.settings.teams && player && player.team >= 0 ? room.teams[player.team] : null;
+        return team ? team.color : null;
+      }
 
       // ------------------------------------------------------------ local
       function readPlayer(call, player) {
@@ -5189,6 +5231,7 @@ self.onmessage = async ({ data: e }) => {
         call.invoke("PlayerObject::setColor", [player + RGBA, color(info.color1 || [125, 255, 0])]);
         call.invoke("PlayerObject::setSecondColor", [player, color(info.color2 || [0, 255, 255])]);
         const name = createNameLabel(ui, parent, info.name || "Player");
+        if (teamOf(info)) ui.color(name.label, teamOf(info));
         const visual = { player, name, layer, mode: "cube", mini: 0, up: 0, dead: false, icons, profileKey: profileKey(info), info };
         setMode(call, visual, "cube", icons);
         applySettings(ui, visual);
@@ -5576,7 +5619,11 @@ self.onmessage = async ({ data: e }) => {
                 visual.dead = true;
                 call.invoke("PlayerObject::playerDestroyed", [visual.player, 0]);
               }
-              if (net.room.settings.deathlink && death.real) {
+              // With teams, Death Link only affects teammates.
+              const me = playerInfo(net.myId),
+                them = playerInfo(death.id),
+                sameTeam = !net.room.settings.teams || !me || !them || me.team === them.team;
+              if (net.room.settings.deathlink && death.real && sameTeam) {
                 const p1 = mem.ptr(layer + OFF.player1);
                 if (!mem.u8(p1 + OFF.isDead)) {
                   local.killingFromLink = true;
@@ -5671,6 +5718,7 @@ self.onmessage = async ({ data: e }) => {
           exit01: "menu/exit01.png",
           exit02: "menu/exit02.png",
           server02: "menu/server02.png",
+          teams02: "menu/teams02.png",
           invite: "menu/invite.png",
           search01: "menu/search01.png",
           search02: "menu/search02.png",
@@ -6314,6 +6362,7 @@ self.onmessage = async ({ data: e }) => {
                 k.alert("Region", "The web port has a single <cy>peer-to-peer</c> server, so there are no regions to choose from."),
               ),
             ];
+          if (room.id && room.settings.teams) left.push(iconButton(ui, "teams02", size, (k) => teamPopup(k)));
           if (room.id) {
             left.push(
               iconButton(ui, "settings01", size, (k) =>
@@ -6429,12 +6478,14 @@ self.onmessage = async ({ data: e }) => {
         ui.pos(icon, 8 + (height * 0.7) / 2, height / 2);
         ui.add(cell, icon);
         const name = ui.label(player.name, "bigFont.fnt"),
+          team = teamColor(player),
           [nw, nh] = ui.getSize(name),
           scale = Math.max(0.1, Math.min(Math.max((height * 0.65) / nh, 0.6), 130 / nw));
         ui.scale(name, Math.min(scale, (height * 0.65) / nh));
         ui.anchor(name, 0, 0.5);
         const nameX = 8 + height * 0.7 + 7;
         ui.pos(name, nameX, height / 2 + 1);
+        if (team) ui.color(name, team);
         ui.add(cell, name);
         if (isOwner) {
           const crown = sprite(ui, "icon-crown-small");
@@ -6465,6 +6516,89 @@ self.onmessage = async ({ data: e }) => {
           ui.pos(button, width - 5 - 11 - i * 27, height / 2);
           ui.add(menu, button);
         });
+      }
+      const TEAM_COLORS = ["#ffffff", "#fa3939", "#00A2FF", "#00FF00", "#FFD300", "#FF7F00", "#8F00FF", "#FF1493", "#00FFFF", "#228B22", "#FF4500", "#FF69B4", "#9932CC", "#00CED1", "#B22222", "#2E8B57", "#F08080", "#20B2AA", "#4169E1", "#708090"].map((hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
+      function teamColor(player) {
+        const team = net.room.settings.teams && player && player.team >= 0 ? net.room.teams[player.team] : null;
+        return team ? team.color : null;
+      }
+      // Globed's TeamManagementPopup.
+      function teamPopup(ui) {
+        const width = 300,
+          height = 250,
+          popup = ui.popup(width, height, "Team Management");
+        const list = listNode(ui, popup.main, 260, 170, {});
+        ui.pos(list.holder, popup.center[0], popup.center[1] - 2);
+        const bottom = ui.menu();
+        ui.add(popup.main, bottom, 5);
+        const owner = net.isOwner();
+        if (owner) {
+          const locked = ui.toggler(net.room.settings.lockedTeams, (k, on) => net.updateRoomSettings(Object.assign({}, net.room.settings, { lockedTeams: on })), 0.7 * 0.9),
+            label = ui.label("Locked teams", "bigFont.fnt", 0.4);
+          ui.add(bottom, locked);
+          ui.add(popup.main, label);
+          row(ui, [locked, label], ...popup.at(width / 2, 20), 5);
+        }
+        const fill = (k) => {
+          if (popup.closed) return;
+          const room = net.room,
+            me = room.players.find((player) => player.id === net.myId),
+            canJoin = !room.settings.lockedTeams || owner,
+            cells = room.teams.map((team, index) => (k2, cell, w, h) => {
+              const menu = k2.menu();
+              k2.add(cell, menu);
+              const swatch = k2.frame("GJ_colorBtn_001.png");
+              k2.fit(swatch, h * 0.8, h * 0.8);
+              k2.color(swatch, team.color);
+              const swatchButton = k2.button(swatch, () => {
+                // The owner cycles through Globed's team colors.
+                if (!owner) return;
+                const at = TEAM_COLORS.findIndex((c) => c.join() === team.color.join());
+                net.updateTeam(index, TEAM_COLORS[(at + 1) % TEAM_COLORS.length]);
+              });
+              k2.pos(swatchButton, 6 + h * 0.4, h / 2 + 1);
+              k2.add(menu, swatchButton);
+              const name = k2.label("Team " + (index + 1), "bigFont.fnt", 0.6);
+              k2.anchor(name, 0, 0.5);
+              k2.pos(name, 6 + h * 0.8 + 5, h / 2);
+              k2.add(cell, name);
+              let x = w - 6;
+              const joined = me && me.team === index;
+              if (joined || canJoin) {
+                const join = k2.frame(joined ? "GJ_selectSongOnBtn_001.png" : "GJ_playBtn2_001.png");
+                k2.fit(join, h * 0.85, h * 0.85);
+                const joinButton = k2.button(join, () => !joined && net.assignTeam(0, index));
+                k2.pos(joinButton, x - h * 0.425, h / 2);
+                k2.add(menu, joinButton);
+                x -= h * 0.85 + 5;
+              }
+              if (owner) {
+                const remove = k2.frame("GJ_deleteSongBtn_001.png");
+                k2.fit(remove, h * 0.8, h * 0.8);
+                const removeButton = k2.button(remove, () => net.deleteTeam(index));
+                k2.pos(removeButton, x - h * 0.4, h / 2);
+                k2.add(menu, removeButton);
+              }
+            });
+          if (owner) {
+            cells.push((k2, cell, w, h) => {
+              const menu = k2.menu(),
+                plus = k2.frame("GJ_plusBtn_001.png");
+              k2.fit(plus, h, h);
+              const button = k2.button(plus, () => net.createTeam(TEAM_COLORS[net.room.teams.length % TEAM_COLORS.length]));
+              k2.pos(button, w / 2, h / 2);
+              k2.add(menu, button);
+              k2.add(cell, menu);
+            });
+          }
+          loader.cocosForgetTree(k.call, list.scroll.content);
+          list.setCells(k, cells, 26);
+          k.fixTouchPriority(popup.layer);
+        };
+        const off = net.on("roomState", () => pending.push(fill));
+        popup.onClose = () => off();
+        ui.showPopup(popup);
+        fill(ui);
       }
       // Globed's PinnedLevelCell: the room's pinned level with a play button.
       function pinnedLevelCell(ui, cell, width, height, key) {
@@ -6660,7 +6794,7 @@ self.onmessage = async ({ data: e }) => {
       const ROOM_SETTINGS = [
         ["hidden", "Hidden Room", "While enabled, the room can not be found on the public room listing and can only be joined by entering the room ID.", "room"],
         ["privateInvites", "Closed Invites", "While enabled, only the room owner can invite other players to the room.", "room"],
-        ["teams", "Teams", "Enables ability to create and join <cj>Teams</c>. In deathlink, <cy>deaths will only impact your teammates</c>. Otherwise, it only makes a visual difference.", "room", true],
+        ["teams", "Teams", "Enables ability to create and join <cj>Teams</c>. In deathlink, <cy>deaths will only impact your teammates</c>. Otherwise, it only makes a visual difference.", "room", false],
         ["manualPinning", "Auto-pinning", "When enabled, any levels the <cg>room owner</c> plays will be automatically pinned and easy to join for other players.", "room", false, [], true],
         ["isFollower", "Follower Room", "Whenever the <cg>room owner</c> joins any level, other players will be prompted to <cy>follow</c> them to the same level.", "room", false],
         ["collision", "Collision", "While enabled, players can collide with each other.\n\n<cy>Note: this enables safe mode, making it impossible to make progress on levels.</c>", "game", true, ["twoPlayerMode", "switcheroo"]],
