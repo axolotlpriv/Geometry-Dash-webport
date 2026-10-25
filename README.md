@@ -108,7 +108,7 @@ Press `Tab` to open and close it (you can change the key in its Keybinds window)
 * **Labels:** Eclipse's label system with its presets and expressions (`Attempt {attempt}`), fonts, colors, corners and events.
 * **Shortcuts, Bot and Internal Recorder:** restart, practice and checkpoint shortcuts, replays you can record, play back and export, and video recording of the game (saved as a WebM file).
 
-A few options only work in the desktop mod and are shown greyed out: Discord Rich Presence, Physics Bypass, Swift Click, Custom Object Bypass, Default Song Bypass, Slider Limit, Smooth Editor Trail, Inject DLL and Clipsy.
+A few options only work in the desktop mod and are shown greyed out: Discord Rich Presence, Physics Bypass, Swift Click, Legacy Pulse, Custom Object Bypass, Default Song Bypass, Slider Limit, Smooth Editor Trail, Inject DLL and Clipsy.
 
 Cheats like noclip and speedhack turn on safe mode automatically (Auto Safe Mode), so they can't save progress.
 

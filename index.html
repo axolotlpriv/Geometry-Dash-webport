@@ -7442,7 +7442,7 @@ self.onmessage = async ({ data: e }) => {
             o.addColor("level.layoutmode." + color, { alpha: false, default: def.map((v) => v / 255).concat(1) });
           }
         });
-      tab.addToggle("level.legacypulse").options((o) => {
+      tab.addToggle("level.legacypulse").unavailable("The web version's audio engine doesn't provide the music levels the old pulse used.").options((o) => {
         o.addToggle("level.legacypulse.force_fps", { default: false });
         o.addInputFloat("level.legacypulse.fps", { min: 1, max: 1000, step: 1, default: 60, format: "%.0f" });
       });
