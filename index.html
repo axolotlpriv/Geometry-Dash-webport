@@ -169,6 +169,48 @@
       fill: currentColor;
     }
 
+    /* Fullscreen button: in the level's button row, or on its own at the
+       top center in menus (menus use the corners for their own buttons). */
+    #gd-fullscreen[hidden] {
+      display: none;
+    }
+
+    #gd-fullscreen.floating {
+      position: absolute;
+      top: 6px;
+      top: 0.6cqw;
+      left: 50%;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      width: clamp(28px, 2.8cqw, 44px);
+      height: 36px;
+      height: clamp(28px, 2.8cqw, 44px);
+      padding: 0;
+      border: 2px solid #ffffff99;
+      border-radius: 50%;
+      background: #0007;
+      color: #fff;
+      cursor: pointer;
+      opacity: 0.6;
+      transform: translateX(-50%);
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #gd-fullscreen.floating:hover,
+    #gd-fullscreen.floating:focus-visible {
+      opacity: 1;
+    }
+
+    #gd-fullscreen.floating svg {
+      width: 55%;
+      height: 55%;
+      fill: currentColor;
+    }
+
     @media (hover: none) and (pointer: coarse) {
       #gd-keybinds-open {
         display: none !important;
@@ -705,6 +747,9 @@
     <div id="gd-stage">
       <div id="gd-frame">
         <canvas id="canvas" width="1920" height="1080"></canvas>
+        <button type="button" id="gd-fullscreen" class="floating" title="Fullscreen" aria-label="Fullscreen" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z"/></svg>
+        </button>
         <div id="gd-hud" hidden>
           <button type="button" id="gd-keybinds-open" title="Keybinds" aria-label="Keybinds">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zm1 2v8h16V8H4zm1 1h2v2H5V9zm3 0h2v2H8V9zm3 0h2v2h-2V9zm3 0h2v2h-2V9zm3 0h2v2h-2V9zM5 12h2v2H5v-2zm3 0h8v2H8v-2zm9 0h2v2h-2v-2z"/></svg>
@@ -15802,7 +15847,7 @@ self.onmessage = async ({ data: e }) => {
           pointerEvent.target &&
           pointerEvent.target.closest &&
           pointerEvent.target.closest(
-            "#console, #start, #loadFly, #gd-hud, #gd-keybinds, a, button, " +
+            "#console, #start, #loadFly, #gd-hud, #gd-fullscreen, #gd-keybinds, a, button, " +
               "input, textarea, select, .ecl-window, .ecl-popup, .ecl-ball, .ecl-modal-back, #ecl-search",
           )
         ) {
@@ -16298,7 +16343,36 @@ self.onmessage = async ({ data: e }) => {
           lastInLevelAt = Date.now();
         }
         hud.hidden = Date.now() - lastInLevelAt > 3000;
+        placeFullscreenButton();
       }, 250);
+      // Fullscreen button, shown whenever the page isn't fullscreen (and the
+      // browser can do fullscreen at all; iPhones can't).
+      const fullscreenButton = document.getElementById("gd-fullscreen"),
+        fullscreenFrame = document.getElementById("gd-frame"),
+        canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+      function placeFullscreenButton() {
+        const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        fullscreenButton.hidden = isFullscreen || !canFullscreen || !window.__gdInputReady;
+        if (!hud.hidden && fullscreenButton.parentNode !== hud) {
+          fullscreenButton.classList.remove("floating");
+          hud.insertBefore(fullscreenButton, hud.firstChild);
+        } else if (hud.hidden && fullscreenButton.parentNode === hud) {
+          fullscreenButton.classList.add("floating");
+          fullscreenFrame.appendChild(fullscreenButton);
+        }
+      }
+      fullscreenButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const page = document.documentElement,
+          request = page.requestFullscreen || page.webkitRequestFullscreen;
+        try {
+          const result = request && request.call(page);
+          if (result && result.catch) result.catch(() => {});
+        } catch (fullscreenError) {}
+        focusGame();
+      });
+      document.addEventListener("fullscreenchange", placeFullscreenButton);
+      document.addEventListener("webkitfullscreenchange", placeFullscreenButton);
       document.getElementById("gd-pause").addEventListener("click", () => {
         window.__gdPressKey("Escape");
         window.__gdSaveSoon();
@@ -16344,7 +16418,7 @@ self.onmessage = async ({ data: e }) => {
           touchCheckEvent.target &&
           touchCheckEvent.target.closest &&
           touchCheckEvent.target.closest(
-            "#console,#start,#loadFly,#gd-hud,#gd-keybinds,button,input,textarea,select,.ecl-window,.ecl-popup,.ecl-ball,.ecl-modal-back,#ecl-search",
+            "#console,#start,#loadFly,#gd-hud,#gd-fullscreen,#gd-keybinds,button,input,textarea,select,.ecl-window,.ecl-popup,.ecl-ball,.ecl-modal-back,#ecl-search",
           )
         ) {
           return false;

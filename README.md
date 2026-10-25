@@ -63,6 +63,7 @@ The game can also be played on mobile phones and tablets. Tap to jump, drag to s
 ## Controls and Saving
 
 * **Pause button:** While you're in a level, a pause button appears in the top-right corner. It does the same thing as pressing `Esc`.
+* **Fullscreen button:** When the game isn't fullscreen, a fullscreen button appears at the top of the screen in menus, and next to the pause button in levels. It is hidden on browsers that don't support fullscreen, such as Safari on iPhone.
 * **Keybinds:** The keyboard button next to the pause button opens the keybinds menu. There you can add your own keys for jumping, moving, checkpoints and pausing. Your keybinds are kept in your browser.
 * **Saving:** Your progress is saved when you pause, when you switch tabs or close the page, and about once a minute while you're in the menus. Saves are stored in your browser (IndexedDB, with a backup copy in local storage). Songs the game downloads aren't kept between sessions, but NONGs you add with Jukebox are.
 
