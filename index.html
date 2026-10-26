@@ -15417,6 +15417,62 @@ self.onmessage = async ({ data: e }) => {
         }
       }
 
+      // ----------------------------------------------------- wheel scrolling
+      const scrollLists = new Set();
+      // A node is on screen if it and all its parents are visible, up to the
+      // running scene.
+      function onScreen(ui, node, scene) {
+        for (let n = node; n; n = ui.parent(n)) {
+          if (n === scene) return true;
+          if (!ui.isVisible(n)) return false;
+        }
+        return false;
+      }
+      function worldPoint(ui, node, x, y) {
+        const p = ui.ptr("cocos2d::CCNode::convertToWorldSpace", [node, { bytes: new Uint8Array(8) }, { point: [x, y] }]);
+        return [mem.f32(p), mem.f32(p + 4)];
+      }
+      window.addEventListener(
+        "wheel",
+        (event) => {
+          if (!scrollLists.size) return;
+          const canvas = document.getElementById("canvas");
+          if (!canvas) return;
+          const rect = canvas.getBoundingClientRect();
+          if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+          const fx = (event.clientX - rect.left) / rect.width,
+            fy = 1 - (event.clientY - rect.top) / rect.height,
+            // Pixels (or lines) to points: about 30 points per notch.
+            delta = (event.deltaMode === 1 ? event.deltaY * 10 : event.deltaY) * 0.3;
+          loader.runOnGameThread((call) => {
+            const ui = Geode.cocos(call),
+              [w, h] = ui.winSize(),
+              x = fx * w,
+              y = fy * h,
+              scene = ui.runningScene();
+            // Newest first: a popup's list sits over the lists under it.
+            for (const list of [...scrollLists].reverse()) {
+              if (!ui.parent(list.node)) {
+                // Gone for good: let it go.
+                scrollLists.delete(list);
+                ui.release(list.node);
+                continue;
+              }
+              if (!onScreen(ui, list.node, scene)) continue;
+              const [x0, y0] = worldPoint(ui, list.node, 0, 0),
+                [x1, y1] = worldPoint(ui, list.node, list.width, list.height);
+              if (x < Math.min(x0, x1) || x > Math.max(x0, x1) || y < Math.min(y0, y1) || y > Math.max(y0, y1)) continue;
+              const contentHeight = ui.getSize(list.content)[1],
+                [cx, cy] = ui.getPos(list.content),
+                minY = list.height - contentHeight;
+              ui.pos(list.content, cx, Math.min(0, Math.max(minY, cy + delta)));
+              break;
+            }
+          });
+        },
+        { passive: true },
+      );
+
       // --------------------------------------------------------- the kit
       function extend(ui) {
         if (ui.geode) return ui;
@@ -15428,6 +15484,15 @@ self.onmessage = async ({ data: e }) => {
         ui.button = (sprite, onClick, target) => baseButton(sprite, onClick && ((k, sender) => onClick(extend(k), sender)), target);
         ui.toggler = (on, onToggle, scale, sprites) => baseToggler(on, onToggle && ((k, value) => onToggle(extend(k), value)), scale, sprites);
         ui.slider = (value, onChange, scale) => baseSlider(value, onChange && ((k, v) => onChange(extend(k), v)), scale);
+        // Geode's lists scroll with the mouse wheel too (ScrollLayer's
+        // scrollWheel), not only by dragging.
+        const baseScrollLayer = ui.scrollLayer;
+        ui.scrollLayer = (width, height) => {
+          const list = baseScrollLayer(width, height);
+          ui.retain(list.node);
+          scrollLists.add(list);
+          return list;
+        };
         const kit = Object.assign(ui, {
           ids: Geode.ids,
           setID(node, id) {
@@ -15678,6 +15743,8 @@ self.onmessage = async ({ data: e }) => {
           // A Geode TextInput: onInput(text) runs when the text changes.
           geodeInput(width, placeholder, onInput, options = {}) {
             const { holder, input } = ui.textInput(width, placeholder, options.font || "bigFont.fnt", options);
+            // Kept alive while watched, so a removed input is never read.
+            ui.retain(holder);
             watchedInputs.add({ input, holder, last: options.text || "", onInput });
             Geode.data(holder).input = input;
             return holder;
@@ -15910,6 +15977,7 @@ self.onmessage = async ({ data: e }) => {
         for (const watched of [...watchedInputs]) {
           if (!ui.parent(watched.holder)) {
             watchedInputs.delete(watched);
+            ui.release(watched.holder);
             continue;
           }
           const text = ui.inputText(watched.input);
@@ -16743,7 +16811,10 @@ self.onmessage = async ({ data: e }) => {
             contentHeight = Math.max(total, height);
           s.cells = s.entries.map((entry, i) => {
             const cell = buildModItem(ui, entry, width, cellHeight, s.display);
-            ui.pos(cell.node, width / 2, contentHeight - i * (cellHeight + gap) - cellHeight / 2);
+            cell.y = contentHeight - i * (cellHeight + gap) - cellHeight / 2;
+            cell.height = cellHeight;
+            cell.shown = true;
+            ui.pos(cell.node, width / 2, cell.y);
             ui.add(s.scroll.content, cell.node);
             return cell;
           });
@@ -16765,6 +16836,19 @@ self.onmessage = async ({ data: e }) => {
             if (row.x <= -row.width) row.x += row.width;
             if (row.x > 0) row.x -= row.width;
             ui.pos(row.row, row.x, row.y);
+          }
+          // Only the cells in view are drawn (each cell is many nodes).
+          if (s.cells && s.cells.length && s.scroll) {
+            const contentY = ui.getPos(s.scroll.content)[1],
+              listHeight = s.listSize[1];
+            for (const cell of s.cells) {
+              const y = cell.y + contentY,
+                shown = y + cell.height / 2 > -2 && y - cell.height / 2 < listHeight + 2;
+              if (shown !== cell.shown) {
+                cell.shown = shown;
+                ui.visible(cell.node, shown);
+              }
+            }
           }
           if (s.searchAt && performance.now() >= s.searchAt) {
             s.searchAt = 0;
@@ -20184,7 +20268,6 @@ self.onmessage = async ({ data: e }) => {
         "GameManager::fadeInMusic": 0x57bba0,
         "FMODAudioEngine::playMusic": 0x45a140,
         "GameLevelManager::sharedState": 0x542d10,
-        "GameLevelManager::getGJRewards": 0x566020,
         "SecretRewardsLayer::scene": 0x7d2510,
         "SecretRewardsLayer::onBack": 0x7d7c20,
         "SecretRewardsLayer::onShop": 0x7d66d0,
@@ -20199,7 +20282,6 @@ self.onmessage = async ({ data: e }) => {
         CHALLENGE_CAN_CLAIM = 0x64,
         REWARD_TIME_REMAINING = 0x3c,
         TAG = 0x10, // CCObject::m_nTag
-        GLM_REWARD_DELEGATE = 0x358,
         ID = "km7dev.quests_in_pause_menu";
       const WHITE = () => ({ bytes: new Uint8Array([255, 255, 255, 0]) });
 
@@ -20214,14 +20296,11 @@ self.onmessage = async ({ data: e }) => {
             count = Geode.cocosFunction("?count@CCDictionary@cocos2d@@QEAAIXZ"),
             objectForKey = Geode.cocosFunction("?objectForKey@CCDictionary@cocos2d@@QEAAPEAVCCObject@2@_J@Z");
           if (!items || Geode.rtti(items) !== "CCDictionary" || !count || !objectForKey) return false;
-          if (!ui.inv(count, [items]).int) {
-            const glm = ui.ptr("GameLevelManager::sharedState");
-            if (glm) {
-              mem.setPtr(glm + GLM_REWARD_DELEGATE, 0);
-              ui.inv("GameLevelManager::getGJRewards", [glm, 0]);
-            }
-            return false;
-          }
+          // No chest data yet. The mod asks the server for it here; on the
+          // web the game's requests share one queue, so a slow chest request
+          // held up everything else online. It shows once the chests have
+          // been opened.
+          if (!ui.inv(count, [items]).int) return false;
           // "theres a chance these are backwards"
           const bigChest = ui.ptr(objectForKey, [items, 1]),
             smallChest = ui.ptr(objectForKey, [items, 2]);
@@ -22498,8 +22577,6 @@ self.onmessage = async ({ data: e }) => {
       const mem = Geode.mem,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
-        "GameLevelManager::sharedState": 0x542d10,
-        "GameLevelManager::getGJRewards": 0x566020,
         "RewardsPage::rewardsStatusFinished": 0x7cd490,
       });
       const ID = "lilnibblit.chestalert",
@@ -22507,18 +22584,14 @@ self.onmessage = async ({ data: e }) => {
         TIME_REMAINING = 0x3c; // GJRewardItem::m_timeRemaining
 
       Geode.port(ID, {}, (mod) => {
-        const getGJRewards = (ui) => ui.inv("GameLevelManager::getGJRewards", [ui.ptr("GameLevelManager::sharedState"), 0]);
-        let loaded = false;
         mod.modify("MenuLayer", {
           init(self) {
             if (!self.origBool()) return false;
             const ui = self.ui;
-            // $on_mod(Loaded): get the chest data so the chest menu needn't
-            // be opened first.
-            if (!loaded) {
-              loaded = true;
-              getGJRewards(ui);
-            }
+            // The mod asks the server for the chest data ($on_mod(Loaded) and
+            // here). On the web the game's online requests share one queue,
+            // so a slow chest request held everything else up; the mark uses
+            // the data the game already has (from opening the chests).
             const mark = ui.frame("exMark_001.png");
             ui.pos(mark, 40, 35);
             ui.scale(mark, 0.55);
@@ -22528,8 +22601,6 @@ self.onmessage = async ({ data: e }) => {
               count = Geode.cocosFunction("?count@CCDictionary@cocos2d@@QEAAIXZ"),
               objectForKey = Geode.cocosFunction("?objectForKey@CCDictionary@cocos2d@@QEAAPEAVCCObject@2@_J@Z");
             if (items && count && objectForKey) {
-              // No chest data yet.
-              if (!ui.inv(count, [items]).int) getGJRewards(ui);
               const item = (key) => {
                 const p = ui.ptr(objectForKey, [items, key]);
                 return p && Geode.rtti(p) === "GJRewardItem" ? p : 0;
