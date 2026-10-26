@@ -14727,6 +14727,7 @@ self.onmessage = async ({ data: e }) => {
           this.webNotes = options.webNotes || "";
           this.log = makeLogger(this.name);
           this.keybindListeners = new Map();
+          this.fieldInits = {};
           this.settingChangeListeners = new Map();
           const stored = loadState(this.id);
           this.settingValues = stored.settings || {};
@@ -14830,6 +14831,10 @@ self.onmessage = async ({ data: e }) => {
         expandSpriteName(name) {
           return this.id + "/" + name;
         }
+        // m_fields of another object (static_cast<MyPlayLayer*>(pl)->m_fields).
+        fields(className, ptr) {
+          return ptr ? fieldsFor(this, className, ptr, this.fieldInits[className], false) : null;
+        }
         // A raw hook on a game function; fn(call) like GDModLoader hooks.
         hook(target, fn, options = {}) {
           pendingHooks.push({ mod: this, target, fn, when: options.when || null, priority: options.priority || 0 });
@@ -14842,6 +14847,7 @@ self.onmessage = async ({ data: e }) => {
         // `fields` (a function or an object to copy) for every new instance.
         modify(className, methods, options = {}) {
           const fieldsInit = methods.fields || methods.Fields;
+          if (fieldsInit) this.fieldInits[className] = fieldsInit;
           for (const [name, fn] of Object.entries(methods)) {
             if (name === "fields" || name === "Fields" || typeof fn !== "function") continue;
             const target = name.includes("::") ? name : className + "::" + name,
@@ -14894,7 +14900,7 @@ self.onmessage = async ({ data: e }) => {
           call,
           mod,
           get ui() {
-            return loader.cocos(call);
+            return Geode.cocos ? Geode.cocos(call) : loader.cocos(call);
           },
           get fields() {
             if (!fields) fields = fieldsFor(mod, className, ptr, fieldsInit, isInit);
@@ -15061,6 +15067,21 @@ self.onmessage = async ({ data: e }) => {
       });
       const ui = { typing: false };
       Geode.uiState = ui;
+    })();
+    // Geode Web: mod.json, about.md and changelog.md of the ported mods,
+    // from their repositories (generated).
+    (function () {
+      if (!window.Geode) return;
+      window.Geode.modData = {"capeling.startpos_switcher":{"json":{"id":"capeling.startpos_switcher","name":"Startpos Switcher","version":"v1.0.10","developer":"capeling","description":"Just a startpos switcher","settings":{"leftSwitch":{"type":"keybind","name":"Previous Startpos","description":"Switches to the previous startpos, wraps around","default":"Q","category":"gameplay"},"rightSwitch":{"type":"keybind","name":"Next Startpos","description":"Switches to the next startpos, wraps around","default":"E","category":"gameplay"},"opacity":{"name":"Opacity","default":50,"max":100,"min":0,"control":{"slider":true,"slider-step":1},"type":"float"},"hide":{"name":"Don't fade on start","description":"Does not make the menu fade from max opacity when you first open a level","default":false,"type":"bool"},"hideBtns":{"name":"Hide buttons","description":"Hides the arrow buttons","default":false,"type":"bool"},"ignoreDisabled":{"name":"Ignore Disabled","description":"Ignores start positions that have been disabled","default":false,"type":"bool"}},"links":{"homepage":"https://x.com/capelingg","source":"https://github.com/capeling/Startpos-Switcher"},"tags":["enhancement","gameplay","interface","utility"],"issues":{"info":"If you have an issue with the mod please report it here!","url":"https://github.com/capeling/Startpos-Switcher/issues"}},"about":"# Startpos Switcher\nPretty self explanatory, allows you to switch between startpos's using customizable keybinds or the arrow buttons if you are on mobile","changelog":"# Startpos Switcher Changelog\n## v1.0.10\n- Fix for new keybind update\n## v1.0.9\n- Support for 2.2081\n- No longer depends on custom keybinds, go into the mod settings to change keybind now.\n## v1.0.8\n- Internal changes in preparation for 2.208\n- iOS support\n## v1.0.7\n- Improved performance (hopefully)\n- Added custom keybinds support for MacOS and Android\n## v1.0.6\n- Updated for 2.207\n## v1.0.5\n- Fixes crash on MacOS\n## v1.0.4\n- Fixed incorrect current Startpos calculation\n- Added custom keybinds (windows only)\n## v1.0.3\n- Added don't fade on start\n- Added hide buttons\n## v1.0.2\n- Fixed android crash caused by ignore disabled start positions\n## v1.0.1\n- Added ignore disabled start positions\n## v1.0.0\n- Initial release"},"mat.run-info":{"json":{"id":"mat.run-info","name":"Run Info","version":"2.1.2","developer":"mat","description":"Shows info about current run","settings":{"enabled":{"name":"Enabled","type":"bool","default":true,"description":"Enable the mod"},"decimal-places":{"name":"Percentage decimals","description":"Amount of decimal places used for level progress percentage","type":"int","default":0,"min":0,"max":4,"control":{"arrows":true,"arrow-step":1,"big-arrows":false,"slider":false,"input":false}},"position":{"name":"Position","type":"string","default":"Top Left","description":"Where to place the run info widget on the screen","one-of":["Top Left","Top Right","Bottom Left","Bottom Right"]},"_components":{"type":"title","name":"Components"},"show-icon":{"name":"Show icon","type":"bool","default":true,"description":"Shows the icon for the current mode"},"show-mode":{"name":"Show mode","type":"bool","default":true,"description":"Shows the text for the current mode"},"show-from":{"name":"Show \"From %\"","type":"bool","default":true,"description":"Shows from which % the current run is from"},"show-in-percentage":{"name":"Show in percentage","type":"bool","default":false,"description":"Shows the current run in the main \"x%\" text at the top, e.g. \"3-57%\""},"show-in-progress-bar":{"name":"Show in progress bar","type":"bool","default":false,"description":"Shows the starting % of the current run in the progress bar"},"use-start-pos":{"name":"Use startpos icon","type":"bool","default":false,"description":"Whether to use the startpos icon for testmode"},"same-line":{"name":"Same line","type":"bool","default":false,"description":"Puts the \"From %\" text in the same line as the icon if the mode label is disabled"},"_appearance":{"type":"title","name":"Appearance"},"opacity":{"name":"Opacity","type":"int","default":64,"min":0,"max":255},"scale":{"name":"Widget scale","type":"float","default":1.0,"min":0.1,"max":3.0},"color":{"name":"Color tint","type":"color","default":"#FFFFFF"}},"links":{"source":"https://github.com/matcool/geode-mods"},"tags":["gameplay","offline","utility"]},"changelog":"## 2.1.2\n- Port to Geode v5\n\n## 2.1.1\n- Fix progress bar not resetting when exiting practice mode\n\n## 2.1.0\n- Add option for specific amount of decimal places\n- Add option to show run in progress bar percentage\n- Add option to show run in progress bar visually\n  - Thanks cgytrus for all these new features!\n\n## 2.0.1\n- Fix opacity not being applied to icon\n\n## 2.0.0\n- Add setting to toggle the mod\n- Add setting to enable decimal percentages\n- Add setting to change opacity, scale and color\n- Add setting to put \"From %\" text on same line\n\n## 1.2.1\n- Fix setting migration not deleting old values\n- Add changelog\n\n## 1.2.0\n- Set node ids for run info widget\n- Position setting is now nicer\n- MacOS support\n\n## 1.1.0\n- Hide info label in platformer mode\n- Port to GD 2.2074\n\n## 1.0.0\n- Add more options from the original mod\n  - Adds the option to disable the labels and icons"},"elohmrow.death_tracker":{"json":{"id":"elohmrow.death_tracker","name":"Death Tracker","version":"v3.0.9","developer":"abb2k","description":"Tracks your deaths at every percentage","settings":{"functionallity-title":{"type":"title","name":"Functionality"},"session-method":{"name":"Session Method","description":"Determines when a session should end.\n<cy>Exit level</c> - Ends when exiting the level.\n<cy>Exit Game</c> - Ends when exiting the game.\n<cy>Exit Game</c> - End after a set amount of seconds pass (Session Length).","type":"string","default":"Exit game","one-of":["Exit level","Exit game"]},"quick-save":{"name":"Quick Save","description":"Will save your deaths instantly when dying instead of when exiting the level, this can cause lag spikes for some people.","type":"bool","default":false},"safe-mode-v3":{"name":"Safe Mode","description":"Will prevent ANY form of death tracking","type":"bool","default":false},"cheat-detect":{"name":"Cheat Detection","description":"Will prevent deaths from tracking when using noclip or speedhack (mostly accurate)","type":"bool","default":true},"disable-tracking-completed-levels":{"name":"Disable Tracking Completed Levels","description":"Disables tracking on completed online levels.","type":"bool","default":false},"disable-practice-tracking":{"name":"Disable Practice Mode Tracking","description":"Disables tracking deaths while playing in practice mode","type":"bool","default":false},"clock-format":{"name":"Clock Format","description":"Select either 12-hour or 24-hour time display.","type":"string","default":"12-hour","one-of":["12-hour","24-hour"]},"bakcups-title":{"type":"title","name":"Backups"},"backups-unlimited":{"type":"bool","default":false,"name":"Unlimited Backups","description":"Remove/Add the limit for how many of the most recent backups should be saved"},"backups-max-amount":{"type":"int","default":5,"min":1,"name":"Max Auto Backups","description":"The limit of how many backups will be saved before old ones are deleted","enable-if":"!backups-unlimited"},"auto-bakcups-title":{"type":"title","name":"Auto Backups"},"auto-backups-enabled":{"type":"bool","default":true,"name":"Auto Backups Enabled","description":"Enable/Disable auto backups on all levels"},"auto-backups-general":{"type":"bool","default":true,"name":"Auto Backup General","description":"Whether to backup the general (not session) data when creating a backup automatically","enable-if":"auto-backups-enabled"},"auto-backups-sessions-all":{"type":"bool","default":true,"name":"Auto Backup All Sessions","description":"Whether to backup all sessions of a level when creating a backup automatically. if diabled you can set the specific amount of sessions you wanna save in the \"Backup Sessions Amount\" setting","enable-if":"auto-backups-enabled"},"auto-backups-sessions-amount":{"type":"int","min":0,"default":2,"name":"Auto Backup Sessions Amount","description":"How many of the most recent sessions should be saved in a automatically created backup","enable-if":"auto-backups-enabled && !auto-backups-sessions-all"},"auto-backup-at-lvl-exit":{"type":"bool","default":true,"name":"Auto Backup at level exit","description":"Create a backup whenever exiting a level","enable-if":"auto-backups-enabled"},"auto-backup-at-dt-exit":{"type":"bool","default":true,"name":"Auto Backup at death tracker menu exit","description":"Create a backup whenever exiting the death tracker menu","enable-if":"auto-backups-enabled"},"save-title":{"type":"title","name":"Save"},"check-for-old":{"name":"Convert old saves","description":"This is used to convert old saves from death tracker V2 to V3","type":"custom:button-type-dt"},"claim-dono":{"name":"Claim Donation","description":"This is used to claim donations in the death tracker","type":"custom:claim-dono-setting-type-dt"},"save-path-new":{"type":"folder","name":"Save Path","default":"{mod_save_dir}\\levels"},"customazation-title":{"type":"title","name":"Customazation"},"pause-menu":{"name":"Pause Menu Button","description":"Adds the tracker button to the pause menu.","type":"bool","default":true},"complete-menu":{"name":"Complete Menu Button","description":"Adds the tracker button to the level complete screen.","type":"bool","default":true},"enter-new-line":{"type":"keybind","name":"Enter new line","description":"Enters a new line when editing a labels text","category":"universal","migrate-from":"elohmrow.death_tracker/enter-new-line","default":{"win":["Enter"],"mac":["Enter"],"ios":["Enter"],"android":["Enter"]}},"enter-new-run-per":{"type":"keybind","name":"Enter new run percentage","description":"Enters a new run percent when inputting for adding a new percent to your \"runs to track\"","category":"universal","migrate-from":"elohmrow.death_tracker/enter-new-run-per","default":{"win":["Enter"],"mac":["Enter"],"ios":["Enter"],"android":["Enter"]}},"add-deaths":{"type":"keybind","name":"Add deaths","description":"Adds deaths while you input a percent to change deaths to your level","category":"universal","migrate-from":"elohmrow.death_tracker/add-deaths","default":{"win":["Enter"],"mac":["Enter"],"ios":["Enter"],"android":["Enter"]}},"remove-deaths":{"type":"keybind","name":"Remove deaths","description":"Removes deaths while you input a percent to change deaths to your level","category":"universal","migrate-from":"elohmrow.death_tracker/remove-deaths","default":{"win":["Shift+Enter"],"mac":["Shift+Enter"],"ios":["Shift+Enter"],"android":["Shift+Enter"]}}},"links":{"source":"https://github.com/abb2k/death-tracker","community":"https://discord.gg/8VTdWXghA6"},"tags":["utility","interface","offline"],"issues":{"info":"Feel free to send eny issues on the \"feedback\" channel on the discord server!","url":"https://discord.gg/8VTdWXghA6"}},"about":"# Death Tracker\n\nThe Death Tracker mod will <cy>automatically</c> track your <cr>deaths</c>, <cf>playtime</c>, and <co>sessions</c> while you play!\\\nTo <cy>check out your progress</c> press the <cg>death tracker button</c> (button with a skull) on the bottom left of the <cy>level page!</c>\n\nYou can <cr>c<co>u<cy>s<cg>t<cf>o<cb>m<cp>i<cr>z<co>e</c></c></c></c></c></c></c></c></c> <cy>y<cg>o<cf>u<cb>r</c></c></c></c> <cp>l<cr>a<co>y<cr>o<co>u<cy>t</c></c></c></c></c></c> and re-organize how death tracker looks, and also modify your save <cy>however fits you!</c>\n\n\nThere are many features that <cf>need explaining</c> so if you are having a <cr>difficult time</c> using some features, fell free to either use the <cb>(**i**)</c> buttons around the menus to <cf>view tutorials about specific features!</c>\n\nor you can join the <cf>discord server</c> and ask a question there!\n\nspeaking of the <cf>discord server</c>, if you find any <cy>issues</c> with the mod or have any <cc>suggestions</c> as for things to add or change, <cf>fell free to post about it on the discord!!</c> :D\n\n## Features\n------------------\n\n- Automatic death tracking\n- Automatic session death tracking\n- Customizable layout\n- Customizable Graphs to view your data\n- Session grouping by time\n- Accurate playtime by nanoseconds\n- Linking between level saves\n- Seperate level into named sections\n- Basic cheat detection (Noclip, Speedhack)\n- Safe mode\n- Automatic backups\n- Manual backups\n- Exporting/Importing save file\n- Calculator\n- Save file editing (adding/removing runs and new bests)\n- Run filtering (hide by length, specific start positions)\n- Resetting as death\n\n\n## Special Thanks\n------------------\n\n**ElohmroW** for making the original V1 version of the mod.\n\n**Mod Icon:** *taz*\\\n**UI help and assets:** *ZhulinskiiDanil*\\\n**Coding and learning help**: *Geode dev chat*\\\n**Testing and suggestions**: *death tracker beta testers! (ty all !!)*","changelog":"# Changelog\n\n## v3.0.9\n- fixed a bug where the first run after opening a level when not playing from 0 will not track for no reason\n- fixed deleting save data while inside of a level causing data corruption\n- created new sprites for the \"mod options\" and \"level options\"\n- fixed timewarp bugs (i think)\n- fixed deleting data while playtime tracker is installed not deleting the playtime correctly\n\n## v3.0.8\n- fixed invalid directory error not showing when its supposed to\n- fixed new best desync (should prevent random unremovable new bests and other new best issues hopefully)\n- improved some error messages\n- changed \"Late Save\" to \"Quick Save\" flipping the action of the setting, this is due to feedback from people getting lag on death\n- added session mode to calculator\n- fixed many crashes and bugs\n- added faded version text to bottom left of the screen\n- added a \"skip tutorial\" button to the tutorial dialogues\n- named my async tasks (about time)\n- re-added \"real end percent\"\n- added open save file directory button to save menu\n\n## v3.0.7\n- new best colors are back!\n- added alternating bright/normal colors for runs\n- made it so backups would not lag the game\n- small fixes to text and in general\n- hide header option added to label settings\n- even more corruption safty added while playing a level\n- layout presets added\n\n## v3.0.6\n- Removed the keyword \"Error:\" from some things that shouldt have it\n- Extra safty protocols for corrupted saves\n- Remove Invalid Runs button added to the modify tab\n- Small changes to default graph and label layout\n- Made backup creating and reverting safer\n- Added a counter showing the amount of hidden runs according to your settings\n- Made graph data appear lower down on mobile devices se it is seen\n- Fixed some people having the old Seconds session method\n\n## v3.0.5\n- Fixed crash to do with unicode paths\n\n## v3.0.4\n- Fixed session groups not being time zone relative\n- Fixed crash on level complete screen\n- Added scrollable text input for easier layout management\n- now with \"Better Touch Prio\", touch issues in layout editing are fixed\n- fixed misspells\n\n## v3.0.3\n- Made sure \"Shared Max To Hide\" defaults to 0\n- fixed misspells\n\n## v3.0.2\n- Improved speedhack detection\n- Fixed crash on android on level entry\n- Fixed two 4s on lvlruns key\n- Made death tracker button disappear when clicking the eye button on the level complete screen\n- Fixed session date not accounting for timezone\n- Fixed an issue were sometimes it wont track runs into sessions\n- Added \"Shared Max To Hide\" for easier filter management for runs\n- Fixed safe mode randomly being enabled for some people\n\n## v3.0.1\n- Fixed crash on invalid save file location\n\n\n..."},"firee.goldenbest":{"json":{"id":"firee.goldenbest","name":"Golden Best","version":"v1.1.3","developer":"Firee","description":"A mod that changes the percentage to gold when you are achieving a new best!","settings":{"practice-mode":{"name":"Show in Practice Mode","description":"Whether or not to change the percentage while in practice mode","type":"bool","default":false},"platformer-mode":{"name":"Show in Platformer Mode","description":"Whether or not to change the time to be gold while playing a platformer level.","type":"bool","default":false},"test-mode":{"name":"Show in Startpos Mode","description":"Whether or not to change the percentage / time to be gold while playing the level with Startpos or in Test Mode.","type":"bool","default":false},"enable-colors":{"name":"Enable Custom Colors","description":"Instead of changing to the gold font, the color of the label will change instead! (Requires restarting level upon setting change)","type":"bool","default":false},"custom-color":{"name":"New Best Color","description":"What color to change the percentage / time when achieving a new best.","type":"color","default":"#FFDD44","enable-if":"enable-colors"}},"tags":["gameplay","enhancement","utility","offline"],"repository":"https://github.com/FireMario211/Golden-Best"},"about":"# Golden Best\nThis mod will give you an indication on whether or not you are currently <cy>achieving a new record</c> in a level!\nYou can change the settings of this mod based on whether or not it should show in <cb>Practice Mode</c>\n\n---\nFor Platformer Levels, the text will **stay <cy>gold</c>** until you reach the time you completed the Platformer Level.\n\n---\n# Credits\nMade by **Firee**, idea from **mMudkip**, and name by **BoomyBoomer**","changelog":"# v1.1.3\n- Bump geode version\n# v1.1.2\n- Make \"show in practice mode/startpos mode/platformer mode\" settings off by default.\n- Bump geode version\n# v1.1.1\n- Bump geode version\n# v1.1.0\n- Added custom colors for percentages\n- Fixed potential incompats with other mods that have a percentage in the end\n- Added Sapphire SDK support\n# v1.0.11\n- Update version of Geode to v4.0.0-beta.1\n# v1.0.10\n- Update version of Geode to v4.0.0-alpha.1\n# v1.0.9\n- Update version of Geode to v3.4.0\n# v1.0.8\n- Support Mac OS\n# v1.0.7\n- Support Geode 3.0.0-beta.1\n# v1.0.6 \n- Support Geode alpha 2\n# v1.0.5\n- Added 2.206 support\n- Temporarily remove Sapphire support\n# v1.0.4 \n- Added Sapphire SDK support\n- Added Disable test mode setting\n# v1.0.3 \n- Fixed issue with the percent not being turn golden if a level uses the \"End Trigger\"\n- Fixed issue with percent not being shown when on test mode\n- Fixed bugs regarding Platformer Mode golden time not working\n# v1.0.2\n- Fix position issue when the percentage changes color.\n# v1.0.1 \n- Fix positioning issue\n- Add Platformer Mode option\n# v1.0.0\n- Geode release"},"weebify.coins_in_pause_menu":{"json":{"id":"weebify.coins_in_pause_menu","name":"Coins in Pause Menu","version":"v1.2.2","developer":"Weebify","description":"Shows current level's coins in the pause menu","links":{"source":"https://github.com/Weebifying/coins-in-pause-menu-geode"},"tags":["interface","utility"]},"about":"# Coins in Pause Menu\n\nShows the current level's coins in the pause menu\n\n![Screenshot](weebify.coins_in_pause_menu/ss.png)\n\n## Special thanks to:\n- [Erymanthus](user:1941705), for testing this mod on MacOS.","changelog":"## v1.2.2\n- ...I don't want to talk about it\n## v1.2.1\n- Updated for GD 2.2081/Geode 5.0.0\n- Fixes the coins order issue\n## v1.2.0\n- Updated for GD 2.2074\n## v1.1.3\n- Fixed an issue with BetterPause on non 16:9 screens\n## v1.1.2\n- Fixed an issue with blinking coin effect not working correctly in platformer levels\n## v1.1.1\n- Fixed BetterPause thing woops mb\n## v1.1.0\n- MacOS support\n- Coin(s) collected in the current attempt are now shown ([#3](https://github.com/Weebifying/coins-in-pause-menu-geode/issues/3))\n- More BetterPause compatability\n## v1.0.4\n- Main levels Secret coins :D\n## v1.0.3\n- BetterPause compatability\n- Moved the coin sprites to `bottom-button-menu`\n## v1.0.2\n- Fixed an Android crash\n## v1.0.1\n- Scuffed main levels support idk\n## v1.0.0\n- Initial release"},"weebify.level_info_in_pause_menu":{"json":{"id":"weebify.level_info_in_pause_menu","name":"Level Info in Pause Menu","version":"v1.1.1","developer":"Weebify","description":"Adds the level info button to the pause menu","links":{"source":"https://github.com/Weebifying/lvlinfo-in-pause-geode"},"tags":["interface","utility"]},"about":"# Level Info in Pause Menu\n\nAdds the level info button to the pause menu\n\n![Image](weebify.level_info_in_pause_menu/image.png?scale=0.9)","changelog":"## v1.1.1\n- Updated for GD 2.2081\n## v1.1.0\n- Updated for GD 2.2074\n## v1.0.5\n- Fixed image preview in mod description\n## v1.0.4\n- Updated for Geode v3.0.0-beta.1\n- Re-added MacOS support\n## v1.0.4-beta.2\n- Updated for Geode v3.0.0-alpha.2\n## v1.0.4-beta.1\n- Added 2.206 support\n## v1.0.3\n- Compatability for ALL mods that hopefully uses the `left-button-menu` menu for their buttons\n- Added tags\n## v1.0.2\n- Fixed pressing spacebar on windows doesn't close the info alert layer\n## v1.0.1\n- Added Layout compatibility with Clicksound and hopefully future mods that uses the same left button menu\n- Bumped NodeIDs version requirement\n## v1.0.0\n- Initial release"},"hiimjustin000.geode_in_pause_menu":{"json":{"id":"hiimjustin000.geode_in_pause_menu","name":"Geode In Pause Menu","version":"v1.1.3","developer":"hiimjasmine00","description":"Manage your mods outside the main menu.","settings":{"game-pause-menu":{"name":"Game Pause Menu","description":"Enables the Geode button in the game pause menu.","type":"bool","default":true},"editor-pause-menu":{"name":"Editor Pause Menu","description":"Enables the Geode button in the editor pause menu.","type":"bool","default":true},"level-edit-menu":{"name":"Level Edit Menu","description":"Enables the Geode button in the level edit menu.","type":"bool","default":true},"level-info-menu":{"name":"Level Info Menu","description":"Enables the Geode button in the level info menu.","type":"bool","default":true}},"links":{"community":"https://discord.gg/QVKmbvBXA7","source":"https://github.com/hiimjasmine00/GeodeInPauseMenu","homepage":"https://www.hiimjasmine00.com"},"tags":["enhancement","interface","gameplay","offline","utility"]},"changelog":"# Geode In Pause Menu Changelog\n## v1.1.3 (2026-02-14)\n- Ported to Geometry Dash v2.208 / Geode SDK v5.0.0\n\n## v1.1.2 (2025-06-23)\n- Ported to Geode v4.6.1\n\n## v1.1.1 (2025-04-08)\n- Added support for iOS\n\n## v1.1.0 (2025-03-29)\n- Added the Geode button to the level edit menu and level info menu (Suggested by [HexCodes](user:16858187))\n\n## v1.0.2 (2025-03-13)\n- Fixed the Geode button scale on the editor pause menu (Reported by [Erymanthus](user:1941705))\n\n## v1.0.1 (2025-03-07)\n- Fixed the Geode logo scale on the game pause menu button (Reported by [Hbg1010](user:9115450))\n\n## v1.0.0 (2025-01-28)\n- Initial release"},"zenzo.hide_pause_menu":{"json":{"id":"zenzo.hide_pause_menu","name":"Hide Pause Menu","version":"v1.2.0","developer":"ZenZo","description":"Adds a button to the pause menu to hide it.","settings":{"main-settings":{"type":"title","name":"Main settings"},"mod_disabled":{"type":"bool","default":false,"name":"Disable Mod","description":"Disables the mod without restarting the game."},"hide_button_pos":{"type":"string","default":"Right","one-of":["Left","Bottom","Right","Off"],"name":"Button Position","description":"Position of the hide button inside the pause menu.\nSetting this to 'Off' disables the button, but keybinds can still be used to hide/show the pause menu."},"end_level_layer_button":{"type":"bool","default":true,"name":"Hide End Level Menu","description":"Applies the mod's hide behavior to the vanilla 'Hide' button on the end level screen."},"keybind-settings":{"type":"title","name":"Keybind settings"},"hide_pause_menu-keybind":{"enable-if":"!mod_disabled","type":"keybind","category":"gameplay","default":"","name":"Hide Pause Menu","description":"Keybind to hide the pause menu, if the game is not paused this will pause it. Also controls the end level menu."},"hide_pause_menu_toggle-keybind":{"enable-if":"!mod_disabled","type":"keybind","category":"gameplay","default":"","name":"Toggle Hide Pause Menu","description":"Keybind to toggle the pause menu visibility. While paused, pause one more time or press this keybind to show the pause menu. Not persistent if you change level."},"auto-hide-settings":{"type":"title","name":"Auto hide settings","description":"These settings control what elements are hidden when the menu is hidden."},"hide_hide_button":{"type":"bool","default":false,"name":"Hide 'Hide Button'"},"hide_end_level_layer_button":{"type":"bool","default":false,"name":"Hide 'End Level Menu' Button"},"hide_fps":{"type":"bool","default":false,"name":"Hide FPS Counter","description":"Hide the vanilla FPS counter in advanced graphics settings, to have this setting on mobile use the 'High Graphics on Mobile' mod."},"hide_progress_bar":{"type":"bool","default":false,"name":"Hide Progress Bar"},"hide_percentage":{"type":"bool","default":false,"name":"Hide Percentage"},"hide_time":{"type":"bool","default":false,"name":"Hide Platformer Timer"},"hide_info_label":{"type":"bool","default":false,"name":"Hide Info Label","description":"Hides the info label (shown in practice mode or via mods). Also hides label added by the 'Run Info' mod."},"hide_testmode_label":{"type":"bool","default":false,"name":"Hide Test Mode Label"},"hide_attemps":{"type":"bool","default":false,"name":"Hide Attempts"},"hide_practice_attemps":{"type":"bool","default":false,"name":"Hide Practice Attempts"},"hide_checkpoints":{"type":"bool","default":false,"name":"Hide Practice Checkpoints"},"hide_ui_layer":{"type":"bool","default":false,"name":"Hide UI Layer","description":"Hides the entire UI layer.\nIncludes practice buttons, audio visualizer, and elements added by other mods (e.g. StartPos switchers)."},"hide_practice_buttons":{"enable-if":"!hide_ui_layer","enable-if-description":"'Hide UI Layer' already hides this.","type":"bool","default":false,"name":"Hide Practice Buttons"},"hide_audio_visualizer":{"enable-if":"!hide_ui_layer","enable-if-description":"'Hide UI Layer' already hides this.","type":"bool","default":false,"name":"Hide Audio Visualizer","description":"Hides the SFX and background audio visualizers."},"hide_floating_buttons":{"type":"bool","default":false,"name":"Hide Floating Buttons","description":"Should hide floating buttons added by other mods.\nNote: this only makes them invisible, they still remain clickable. Currently does not work with the 'QOLmod' button."}},"links":{"source":"https://github.com/Zen-Zo/HidePauseMenuMod"},"tags":["gameplay","offline","enhancement","interface","utility","customization"],"issues":{"info":"If you find any bugs, please report them on GitHub.","url":"https://github.com/Zen-Zo/HidePauseMenuMod/issues"}},"about":"# <c-ffcc4d>Hide Pause Menu</c>\n\n<cy>Adds a hide button to the pause menu</c>, for getting a better look at your deaths or capturing clean screenshots. <cg>(Also works on the hide End Level Menu button)</c>\n\n<cr>Check the mod settings, the mod is not configured by default.</c>\n\n## <c-58a6ff>Settings</c>\n\n- <c-7ee787>Configurable button position:</c> place the hide button on the left, bottom, or right side of the pause menu, or turn it off.\n- <c-7ee787>End Level Menu:</c> the same hide behavior can be applied to the end level screen.\n- <c-7ee787>Keybind support:</c> hide or toggle hide the menu visibility using custom keybinds.\n- <c-7ee787>Auto-hide HUD elements:</c> optionally hide the FPS counter, progress bar, percentage, timer, attempt counter, practice buttons, audio visualizer, and more when the menu is hidden.\n\n<cy>To hide your new bests you can use:</c>\n\n<mod:hbg1010.hidenewbest>\n\n## <c-58a6ff>Same frame before and after mod setup</c>\n\n![Default](zenzo.hide_pause_menu/default.png?width=150)\n![Configured](zenzo.hide_pause_menu/configured.png?width=150)\n\n## <c-ff7b72>Issue Reporting & Feature Requests</c>\n- <c-79c0ff>[Open a GitHub Issue](https://github.com/Zen-Zo/HidePauseMenuMod/issues)</c>\n- <c-79c0ff>[Message me on Discord](https://discord.com/users/202202424469880833)</c>","changelog":"# v1.2.0\n- Added keybind support\n- New settings\n- New description\n\n# v1.1.1\n- Fixed a bug with the \"Hide Practice Buttons\" setting\n- Updated to Geode 5.0.0 and GD 2.2081\n\n# v1.1.0\n- New settings to hide more things!\n- Fix button position on mobile\n- Updated to Geode 4.6.1\n\n# v1.0.3\n- Fix for overlapping buttons with other mods\n- Minor fixes and code refactoring\n\n# v1.0.2\n- Build for other platforms\n\n# v1.0.1\n- Fixed typos and links\n\n# v1.0.0\n- Initial release"},"km7dev.quests_in_pause_menu":{"json":{"id":"km7dev.quests_in_pause_menu","name":"Rewards in Pause Menu","version":"v1.6.2","developer":"km7dev","description":"Adds reward access to the pause menu","settings":{"pause-title":{"type":"title","name":"Pause Menu"},"pause":{"type":"bool","name":"Show in Pause Menu","description":"Adds either buttons or the popup to the pause menu.","default":true},"pause-popup":{"type":"bool","name":"Use Popup","description":"Uses a popup rather than individual buttons.","default":false,"enable-if":"pause"},"chests":{"type":"string","default":"On Left","one-of":["Off","On Left","On Right"],"name":"Chest Button","description":"Choose where the chest button will be placed in the pause menu.","enable-if":"pause && !pause-popup"},"quests":{"type":"string","default":"On Right","one-of":["Off","On Left","On Right"],"name":"Quest Button","description":"Choose where the quest button will be placed.","enable-if":"pause && !pause-popup"},"paths":{"type":"string","default":"On Left","one-of":["Off","On Left","On Right"],"name":"Path Button","description":"Choose where the path button will be placed.","enable-if":"pause && !pause-popup"},"treasure":{"type":"string","default":"On Left","one-of":["Off","On Left","On Right"],"name":"Treasure Room Button","description":"Choose where the treasure room button will be placed.","enable-if":"pause && !pause-popup"},"editor-title":{"type":"title","name":"Editor Pause Menu"},"editor":{"type":"bool","name":"Show in Editor Pause Menu","description":"Adds a button for the popup to the Editor Pause Menu. Due to limited space, individual buttons are not supported.","default":false},"general-title":{"type":"title","name":"General"},"transparent":{"type":"bool","name":"Transparent Backgrounds","description":"Makes backgrounds for the treasure room and shops transparent.","default":false}},"links":{"source":"https://codeberg.org/km7dev/rewards-in-pause"}},"about":"# Rewards in Pause Menu\n\nAdds buttons to the pause menu for the following:\n\n- Quests\n- Daily Chests\n- Paths\n- Treasure Room Chests\n\nYou can change which side each button is on in mod settings!\n\n## Support me!\n\nSupporting me on [my Patreon](https://www.patreon.com/cw/km7dev) is much appreciated, though I don't really have any benefits to provide for supporting me.","changelog":"# 1.6.2\n\n- Fixed the sound effect volume\n- Updated the changelog to include changes for 1.6.2, such as:\n  - Updating the changelog to include changes for 1.6.2, such as:\n    - Updating the changelog to include changes for 1.6.2, such as:\n      - Updating the changelog to include changes for 1.6.2, such as:\n        - Updating the changelog to include changes for 1.6.2, such as:\n          - Updating the changelog to include changes for 1.6.2, such as:\n            - Updating the changelog to include changes for 1.6.2, such as:\n              - Updating the changelog to include changes for 1.6.2, such as:\n                - Updating the changelog to include changes for 1.6.2, such as:\n                  - Updating the changelog to include changes for 1.6.2, such as:\n                    - Updating the changelog to include changes for 1.6.2, such as:\n                      - Updating the changelog to include changes for 1.6.2\n                      - Fixing the sound effect volume\n                    - Fixing the sound effect volume\n                  - Fixing the sound effect volume\n                - Fixing the sound effect volume\n              - Fixing the sound effect volume\n            - Fixing the sound effect volume\n          - Fixing the sound effect volume\n        - Fixing the sound effect volume\n      - Fixing the sound effect volume\n    - Fixing the sound effect volume\n  - Fixing the sound effect volume\n\n# 1.6.1\n\n- Prevent opening BetterInfo's Chest History in pause menu.\n- Internal changes\n\n# 1.6.0\n\n- Fix a crash caused by pressing escape while the treasure room is closing\n- Add back the shops to the pause menu treasure room\n  - There is built in support for [Jam](mod:zilko.jam).\n- Disable dragging the treasure room and shops with [Draggable Popups](mod:undefined0.draggable-popups).\n- Add an option for transparent backgrounds\n\n# 1.5.2\n\n- Probably fix a crash\n- Move source to codeberg\n\n# 1.5.1\n\n- Fix a crash on Apple devices\n\n# 1.5.0\n\n- Update to Geode v5 / GD 2.2081\n- Add a setting to have the options in a popup, along with an option for editor.\n- A few fixes with the alert exclamation marks\n\n# 1.4.0\n\n## \"You ain’t heard nothin’ yet!\" - Al Jolson\n\n- Now shows an exclamation mark when you completed quests or have available daily chests\n- Sound effects now properly work!\n\n# 1.3.2\n\n- Fix mislabeled setting (thanks colon!)\n\n# 1.3.1\n\n- JIT-less iOS support\n\n# 1.3.0\n\n- Add treasure room chests\n- New pixel art logo!\n\n# 1.2.0\n\n- Add Paths\n- (Developer) Recompile because of bindings destructor changes\n\n# 1.1.2\n\n- Use Circle Button Sprite (better TP compat)\n\n# 1.1.1\n\n- Adjust sprites\n- Add info about texture pack\n\n# 1.1.0\n\n- Add chests to pause menu\n- Allow customization of which side the buttons are on\n- Rename mod\n\n# 1.0.6\n\n- Build for mac again\n- Geode 4.0.0-beta.1\n\n# 1.0.5\n\n- Geode 4.0.0-alpha.1 and GD 2.2074\n\n# 1.0.4\n\n- Add discord link to mod page.\n\n# 1.0.2/1.0.3\n\n- Fix a crash when claiming quests\n\n\n..."},"weebify.restartbtn":{"json":{"id":"weebify.restartbtn","name":"Restart Buttons","version":"v1.2.4","developer":"Weebify","description":"Adds buttons to restart the game & more","settings":{"size":{"name":"Size","description":"How big the buttons should be.","type":"float","default":1,"min":1,"max":2,"control":{"slider":true,"slider-step":0.01}},"restart-keybind":{"name":"Restart Keybind","description":"The keybind to restart the game.","type":"keybind","default":"F1"},"reload-keybind":{"name":"Reload Textures Keybind","description":"The keybind to reload the game textures.","type":"keybind","default":"F2"},"keybind_anywhere":{"name":"Keybind works anywhere","description":"...except the editor","type":"bool","default":false,"platforms":["win","android","mac"]},"exit":{"name":"Show Exit button","type":"bool","default":true},"restart":{"name":"Show Restart button","type":"bool","default":true},"reload-textures":{"name":"Show Reload Textures button","type":"bool","default":true}},"links":{"source":"https://github.com/Weebifying/restartbutton-geode"},"tags":["interface","utility"]},"about":"# Restart button\n\nAdds a restart game button, a texture reload button and an exit button (on mobile) in the main menu.\n\nOn Windows/macOS you can set the keybinds for restarting/reloading in the mod settings popup.\n\n![Showcase](https://raw.githubusercontent.com/Weebifying/restartbutton-geode/refs/heads/main/resources/image.png)\n\nYou can change the size of the buttons, as well as toggling them in the mod settings menu.","changelog":"## v1.2.4\n- Fixed keybinds not working after Geode 5.0.0-beta.2\n## v1.2.3\n- Updated for GD 2.2081\n- The keybinds for restarting/reloading textures are now able to be changed in the mod settings popup\n## v1.2.2\n- Added iOS support\n## v1.2.1\n- Updated for Geode 4.0.0-beta.1 and onwards\n## v1.2.0\n- Updated for GD 2.2074\n## v1.1.4\n- I'm silly.\n## v1.1.3\n- Updated for Geode v3.0.0-beta.1\n## v1.1.3-beta.2\n- Updated for Geode v3.0.0-alpha.2\n- Re-added macOS support\n## v1.1.3-beta.1\n- 2.206 support\n- Fixed an issue with popups stacking on each other using keybinds\n- Temporarily removed MacOS support\n## v1.1.2\n- Added an option to be able to use the keybinds from anywhere except the editor\n- Added mac support\n## v1.1.1\n- Added keybinds on Windows (F1 for restart, F2 for reload textures)\n## v1.1.0\n- Added a button to reload only the textures\n- You can now toggle the buttons in the mod settings menu\n- Changed mod name to Restart Button**s**\n## v1.0.2\n- we dont talk about this update\n## v1.0.1\n- Added a close game button for android\n- Added a slider to change the buttons size in the mod settings menu\n## v1.0.0\n- Initial release"},"beat.death_message":{"json":{"id":"beat.death_message","name":"Death Message","version":"v1.3.0","developer":"Beat","description":"Shows a customized message when you die.","settings":{"non-practice-button":{"type":"bool","name":"Don't show messages in practice","description":"Disables the display of death messages during practice","default":false},"folder-button":{"type":"custom:folder-button","name":"Open config folder"}},"links":{"source":"https://github.com/BeatACVR/geode-deathmessages"},"tags":["gameplay","customization","interface","offline"]},"changelog":"# 1.3.0\n- Added a button in the settings that allows you to disable messages in practice. (created by memr404)\n# 1.2.0\n- If a message ends with \\\\#, it will now have only have a chance to appear at a certain percentage. Any number that is higher than 100, lower than 0, or contains anything except a whole number can be shown at any time.\n- The message from the previous death will now disappear immediately if it is still on screen when the next death occurs.\n# 1.1.0\n- Added support for Geode v5 / GD 2.2081.\n# 1.0.1\n- Added repository URL. (I always forget it)\n# 1.0.0\n- Initial release. Expect bugs."},"kittenchilly.randomize_icon_on_death":{"json":{"id":"kittenchilly.randomize_icon_on_death","name":"Randomize Icon on Death","version":"v1.4.6","developer":"kittenchilly","description":"Randomizes your icon everytime you die","settings":{"icons":{"type":"title","name":"Icons"},"cube":{"type":"bool","name":"Cube","default":true},"ship":{"type":"bool","name":"Ship","default":true},"ball":{"type":"bool","name":"Ball","default":true},"ufo":{"type":"bool","name":"UFO","default":true},"wave":{"type":"bool","name":"Wave","default":true},"robot":{"type":"bool","name":"Robot","default":true},"spider":{"type":"bool","name":"Spider","default":true},"swing":{"type":"bool","name":"Swing","default":true},"jetpack":{"type":"bool","name":"Jetpack","default":true},"special":{"type":"title","name":"Special"},"deathEffect":{"type":"bool","name":"Death Effect","default":true},"trail":{"type":"bool","name":"Trail","default":true},"shipFire":{"type":"bool","name":"Ship Fire","default":true},"animation":{"type":"bool","name":"Animation","default":true},"explode":{"type":"bool","name":"Explode Toggle","description":"This randomizes whether the icon explode effect is on or off after every death.","default":true},"colors":{"type":"title","name":"Colors"},"color1":{"type":"bool","name":"Color 1","default":true},"color2":{"type":"bool","name":"Color 2","default":true},"glowColor":{"type":"bool","name":"Glow Color","default":true},"glow":{"type":"bool","name":"Glow Toggle","description":"This randomizes whether the glow is on or off after every death.","default":true}},"links":{"source":"https://github.com/kittenchilly/Randomize-Icon-on-Death"},"tags":["gameplay","customization","offline"]},"about":"# Randomize Icon on Death\n\nEverytime you die or restart a level, it randomizes your icons, colors, effects, etc. based on what is enabled in the mod settings. Only chooses ones you have unlocked.\nFor people that really can't decide what to use.\n\nIf you find any bugs or have any ideas, please post them on [GitHub](https://github.com/kittenchilly/Randomize-Icon-on-Death/issues) or message me on Discord @kittenchilly (I am in the Geode server)!\n\n# Credits\nhiimjasmine000 - Icon Randomizer API and initial inspiration, check out her Better Icon Randomizer mod!","changelog":"# v1.4.6\n- Fixed crash related to Globed\n\n# v1.4.5\n- Fixed Globed issue where icon in progress bar didn't properly update\n\n# v1.4.4\n- Globed support\n\n# v1.4.3\n- Fixed cases of the trail, shipfire, and glow toggle not randomizing properly\n\n# v1.4.2\n- Fixed repeat icons appearing more often than they should\n- Optimized Separate Dual Icons support\n\n# v1.4.1\n- Fixed some cases of objects set to player color not updating\n\n# v1.4.0\n- Progress bar and objects set to match player color now update properly with the randomized player color\n\n# v1.3.1\n- Update to Geode v5.3.0 (Fixes a bug related to Spider 30)\n\n# v1.3.0\n- You can now toggle which specific gamemode icons, colors, and effects you want to randomize on death in the mod's settings.\n  - For example, you can choose to randomize just colors, randomize everything except death effect, etc.\n\n# v1.2.6\n- Updated to 2.2081 and Geode v5.0.0\n\n# v1.2.5\n- Add iOS support\n\n# v1.2.4\n- Updated to 2.2074 and Geode v4.0.0\n\n# v1.2.3\n- Updated to Geode v3.3.0\n\n# v1.2.2\n- Fix glow toggle randomization\n\n# v1.2.1\n- Fix death effect crashing regression\n\n# v1.2.0\n- Icon randomization is now done through Icon Randomizer API by hiimjustin000 (new dependency)\n- The optional p2/dual randomization is now done through and requires Seperate Dual Icons by Weebify, instead of being a setting.\n\n# v1.1.2\n- More accurate particles and trails\n- More accurate glow randomization\n- Changed a bit where the randomization occurs which is, say it with me, more accurate\n\n# v1.1.1\n- Add macOS support\n- Fixed crashes related to random death effects\n\n# v1.1.0\n- Updated to Geode v3.1.0\n- Added a \"Random P2\" config option, when enabled it makes it so P2 is also a completely random icon instead of being inverse colors of P1's random icon\n- Changed how achievements are checked, meaning there should be less crashes\n- Various fixes that should make icons display better\n\n# v1.0.4\n- Update the mod to 2.206 and Geode 3.0.0\n- Change how it detects when you die, which I found is more accurate.\n\n# v1.0.3\n- Fix colors not properly randomizing for player 2/dual, for real this time\n\n# v1.0.2\n- Fix duals and 2 player not randomizing properly\n- Add android support\n\n# v1.0.1\n- Fixed spawning as the wrong icon, most notably with the ball\n\n# v1.0.0\n- Initial release"},"dominodev.coin-sounds":{"json":{"id":"dominodev.coin-sounds","name":"Coin Sounds","version":"v1.0.4","developer":"dominodev","description":"Plays a sound when you collect a coin.","settings":{"custom-sounds":{"type":"bool","name":"Enable Custom Sounds","description":"Enable custom sounds for the coins!","default":false},"inbuilt-sound":{"type":"string","name":"Inbuilt sound (READ DESCRIPTION)","default":"","description":"Use a sound <cy>already in the game files</c> for the coin sound. Keep **blank** if you are not using it. <cr>PLEASE</c> only use this if you know what you're doing because inputting a file that does not exist may <cr>crash the game</c>.","enable-if":"custom-sounds","filter":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.0123456789-_/"},"uploaded-sound":{"type":"file","name":"Custom Sound","enable-if":"custom-sounds","default":{"win":"","mac":"","android":""},"control":{"dialog":"open","filters":[{"files":["*.mp3","*.ogg","*.wav"],"description":"Audio files"}]}},"pitchjeader":{"type":"title","name":"Pitch Settings"},"enable-random-pitch":{"type":"bool","name":"Enable Random Pitch","description":"Enable random pitch for the coin sound","default":false},"min-pitch":{"type":"float","name":"Minimum Pitch","description":"The minimum pitch for the coin sound","default":1.0,"min":0.1,"max":3.0,"step":0.1,"enable-if":"enable-random-pitch"},"max-pitch":{"type":"float","name":"Maximum Pitch","description":"The maximum pitch for the coin sound","default":1.0,"min":0.1,"max":3.0,"step":0.1,"enable-if":"enable-random-pitch"}},"tags":["customization","enhancement","offline"]},"about":"# Coin Sounds\n\nAdds a <cb>sound</c> when you collect a <cy>coin!</cy> Can be changed in the <cg>settings</cg>.","changelog":"# 1.0.0\n- Initial Release\n\n# 1.0.1\n- Fixed possible pitfall\n\n# 1.0.2\n- Added random pitch and fixed for GD 2.081"},"raydeeux_thesillydoggo.decimalpercentages":{"json":{"id":"raydeeux_thesillydoggo.decimalpercentages","name":"DecimalPercentages","version":"v1.2.6","developers":["TheSillyDoggo","RayDeeUx"],"description":"Shows decimals in your percentages everywhere.","settings":{"enabled":{"name":"Enabled","description":"Toggles the mod.","type":"bool","default":true},"decimalPlaces":{"name":"Decimal Places","description":"The amount of decimal places you want in your percentage.\n\n<cy>If you have DeathScreenTweaks</c> <cl>(DST)</c> <cy>installed, decimal percentage settings from DST</c> <cl>(specifically for \"New Best\" screens)</c> <cy>will override your preference set here.</c>","type":"int","default":2,"min":1,"max":15,"control":{"input":true,"slider":true,"arrows":true,"big-arrows":true,"arrow-step":1,"big-arrow-step":5,"slider-step":1}},"noTrailingZeros":{"name":"Disable Trailing Zeroes","description":"<cl>Suggested by levigaming1248.</c>\n\nRemoves repeated trailing zeroes (0) from percentages.\nUseful for levels with less than 100% before (re)installing this mod.\n\n<cy>This will apply to all percentages regardless of your preferences below this setting.</c>","type":"bool","default":true},"insaneMode":{"name":"Insane Mode","description":"For the person who wants to display more than three decimal points outside of the level progress bar.","type":"bool","default":false},"ignoreHundredPercent":{"name":"Ignore 100%","description":"<cl>Suggested by levigaming1248.</c>\n\nWon't apply decimal points to levels you have completed. Applies everywhere.","type":"bool","default":false},"ignoreLevelCell":{"name":"Ignore Level Cells","description":"<cl>Suggested by levigaming1248.</c>\n\nWon't apply decimal points to level cells (when browsing online levels, saved online levels, and levels in level lists).\n\n<cy>For obvious reasons, this setting overrides</c> <cy>\"Insane Mode\"</c><cy>.</c>","type":"bool","default":false},"ignorePercentageLabel":{"name":"Ignore \"New Best\" in Percentage Label","description":"Won't apply decimal points to the \"highest percentage\" section of the percentage label <cy>(if the percentage label includes your highest percentage of a level.)</c>","type":"bool","default":false},"ignoreEditLevelLayer":{"name":"Ignore Editor Levels","description":"Won't apply to the percentage labels added to the UI of editor levels from MarioMastr's \"Progress of Editor Levels\" mod.","type":"bool","default":false},"logging":{"name":"Logging","description":"Toggles logging the percentage text, in case another mod decides to be disruptive.\n\n<cr>Only enable this if you know what you're doing, or if you are told to do so.</c>","type":"bool","default":false}},"links":{"community":"https://discord.gg/WqZBYdBWZW","homepage":"https://discord.com/channels/822510988409831486/1206371881222144020"},"repository":"https://codeberg.org/RayDeeUx/DecimalPercentages","issues":{"url":"https://discord.com/channels/911701438269386882/1205523212444639292","info":"Ping me <cl>(@erymanthus)</c> in the Geode SDK Discord server's <cl>#help</c> channel if you need help. <cr>DMs are NOT accepted.</c>"}},"about":"# DecimalPercentages\n\n### <cy>As seen on</c> <c-ff0000>You</c>Tube<c-ffff55>!</c> ([Hqmy](https://youtube.com/watch?v=AO--mVVFtKI&t=23), Every End 79.62%)\n\nAdds decimal points to percentages everywhere you can think of <cy>(also read the notes below this list!)</c>:\n- Main levels selection menu\n- Level lists and level browsing menus\n- Pause menu (including Editor levels)\n- \"New Best\" screens\n- Best scores shown in percentage (%) label <cy>(Requires a mod menu with a \"Best in Percentage\" feature enabled for full effect)</c>\n- Editor levels <cy>(MarioMastr's [Progress in Editor Levels](mod:mariomastr.progress_of_editor_levels) required)</c>\n\n<cr>_***Note:***_</c> *<cr>As there are roughly five competing mod menus on the Geode index as of publishing this mod (and a vanilla in-game toggle), this mod will not add decimal points to the text displaying your current percentage while playing a level.</c>*\n\n<cy>_***Note:***_</c> *<cy>For those who have</c> <cl>DeathScreenTweaks</c><cy>, you are welcome to leave the</c> <cl>\"Accurate Percentages\"</c> <cy>toggle setting to whatever you like; DecimalPercentages will try its best to be compatible in any case.</c>*\n\n_***Note:***_ *By default, this mod allows (at most) three decimal points when viewing online levels, saved online levels, and levels in level lists. Enable <cl>\"Insane Mode\"</c> in the mod settings to disable this limit.*\n\nMost of this mod's code, including how this mod stores level percentages, was written by TheSillyDoggo. Then life happened, as well as a few bug reports.\n\nMod idea by [levigaming1248](https://discord.com/users/1054183308042440706). A salute to [at4pm](https://github.com/at4pm) for attempting this mod. <cl>o7</c>\n\nThis [Geode mod](https://geode-sdk.org) is a (consenting) continuation of TheSillyDoggo's (unfinished) \"Decimal Percentages\" mod, and is licensed under the LGPLv2 license.\n\nTo report bugs or get help with using my mods, press the Discord button in the lower left corner.","changelog":"# DecimalPercentages Changelog\n## v1.2.6\n- Minor refactors.\n## v1.2.5\n- Improved compatibility with Blitzkrieg.\n## v1.2.4, v1.2.3, and v1.2.2\n- Port to GD 2.2081.\n## v1.2.1\n- Experimental iOS support.\n## v1.2.0\n- Added support for percentages added by MarioMastr's \"Progress of Editor Levels\" mod.\n- Refactored a few things here and there.\n- Hello, Hqmy!\n## v1.1.3\n- *Hopefully* fix a bug where the decimal percentages for some level cells displayed some variation of `0.000%`.\n- Refactor a few things here and there.\n## v1.1.2\n- Port to 2.2074.\n## v1.1.1\n- Added support for saving percentages for gauntlet variants of a level ID.\n## v1.1.0\n- Refactor how percentages are saved.\n- Fix decimal points not being applied to best % scores from practice mode in the % progress bar label.\n- Fix one last odd edge case where percentages displayed in the progress bar weren't equal to what was recorded by the mod.\n- Fix a bug where percentages saved from Daily/Weekly/Event variants of a level ID were applied to regular variants of the same level ID, despite different amounts of progress.\n- As a consequence of both of these bug fixes, DecimalPercentages is not as aggressive with applying its decimal points, more significantly so to levels with percentage progress before installing the mod. (Hopefully.)\n## v1.0.1\n- Quick compatibility bugfix when DeathScreenTweaks isn't enabled/installed.\n- Quick bugfix for \"New Best\" screens when dying on rated levels.\n## v1.0.0\n- Initial release (on GitHub)."},"rainixdev.coinsprogressbar":{"json":{"id":"rainixdev.coinsprogressbar","name":"Coins Progressbar","version":"v1.0.3","developer":"rainixdev","description":"A simple mod that shows the X coordinate of coins in the level on the progressbar","links":{"community":"https://discord.gg/Me4zGgW33M","source":"https://github.com/RainixGD/CoinsProgressbar"},"tags":["interface","offline","gameplay","cheat"]},"about":"# Coins Progressbar\n\nA simple mod that shows the X coordinate of coins in the level on the progressbar"},"prevter.go-indicator":{"json":{"id":"prevter.go-indicator","name":"Go! Indicator","version":"v1.3.0","developer":"prevter","description":"Add custom markers to your progress bar","links":{"source":"https://github.com/prevter/gd-go-indicator","community":"https://discord.gg/HaHn7RSJ4Q"},"tags":["interface","customization"]},"about":"# Go! Indicators\n\nThis mod allows you to add custom indicators to your progress bar.\nYou can set percentage, color and text for each indicator.\n\nSettings are stored separately for each level, so you can have different indicators for each one.\n\nYou can use `\\n` to add newlines in the text.\n\n## Help\nIf you have any questions, feel free to contact me on discord: `@prevter`,\nor create an issue on the [GitHub page](https://github.com/prevter/gd-go-indicator).\n\n## Credits\nIdea by 7hat3eird0ne (Inspired by JonathanGD streams)\n\n## License\nThis mod is licensed under the MIT License.","changelog":"# 1.3.0\n- Ported to Geometry Dash 2.2081\n- Added individual label scale option (thanks @glowrock)\n- Added \"Best %\" mode to track the best percentage of the current level\n- Minor performance improvements\n\n# 1.2.1\n- Bump Geode version to 4.7.0\n\n# 1.2.0\n- Added iOS support\n\n# 1.1.1\n- Bump Geode version to 4.0.0-beta.1\n\n# 1.1.1-beta.1\n- Ported to Geometry Dash 2.2074\n\n# 1.1.0\n- Added labels scale option\n- Added label font setting\n- Changed pause menu button icon (thanks @availax)\n- Fixed missing space character in label input\n- Added more Node IDs\n\n# 1.0.0\n- Initial release"},"khronophobia.inputs_viewer":{"json":{"id":"khronophobia.inputs_viewer","name":"Inputs Viewer","version":"v1.4.1","developer":"Khronophobia","description":"Shows player inputs during gameplay.","settings":{"open-ui-setting":{"name":"Open Display Settings","type":"custom:ui-setting-button"},"ui-setting-in-pause":{"name":"Settings Button in Pause Menu","type":"bool","default":true},"category-logic":{"name":"Logic","type":"title"},"cps-calculation":{"name":"CPS Calculation","type":"string","default":"Real-Time","one-of":["Real-Time","Per Second"]},"reset-inputs-per-attempt":{"name":"Reset 'Total Inputs' on Each Attempt","type":"bool","default":false},"category-appearance":{"name":"Appearance","type":"title"},"background-press-color":{"name":"Background Press Color","type":"rgba","default":[255,255,255,255]},"background-release-color":{"name":"Background Release Color","type":"rgba","default":[0,0,0,127]},"outline-press-color":{"name":"Outline Press Color","type":"rgba","default":[255,255,255,255]},"outline-release-color":{"name":"Outline Release Color","type":"rgba","default":[255,255,255,255]},"text-press-color":{"name":"Text Press Color","type":"rgba","default":[0,0,0,255]},"text-release-color":{"name":"Text Release Color","type":"rgba","default":[255,255,255,255]}},"links":{"source":"https://github.com/Khronophobia/Inputs-Viewer"},"tags":["interface"]},"about":"# Inputs Viewer\n\nShows player inputs during gameplay. Configure in the pause menu.\n\nThis mod is inspired by the Key Viewer feature in <cy>ADOFAI Tweaks</c> (a mod for <cj>A Dance of</c> <cr>Fire</c> <cj>and Ice</c>).\n\nUntested on MacOS and Android","changelog":"# v1.4.1\n\n- Changed how inputs are detected\n\n# v1.4.0\n\n- Added a \"Reset 'Total Inputs' on Each Attempt\" setting\n- Adjusted CPS calculation so that it accounts for TimeWarp triggers\n\n# v1.3.2\n\n- Ported to 2.2081\n\n# v1.3.1\n\n- Android version from someone's request\n\n# v1.3.0\n\n- You can now access display settings in the mod \n- Add a setting to disable the button in the pause menu\n\n# v1.2.2\n\n- Port to 2.2074\n\n# v1.2.1\n\n- Fixed a crash when entering a level without level data\n- Added categories to mod settings\n\n# v1.2.0\n\n- Added <cy>CPS Calculation</c> to mod settings\n- Separated input settings to Classic and Platformer\n- Changed <cy>Hide L&R Buttons in Non-Platformer</c> to <cy>Hide L&R Keys</c> because of the above feature\n\n# v1.1.0\n\n- Fixed key display staying pressed when pausing the game\n- Default keys positions are now based on your aspect ratio\n- Added reset positions button\n- Added <cy>Hide L&R Buttons in Non-Platformer</c>\n- Added <cy>Show Clicks per Seconds</c>\n\n# v1.0.1\n\nInitial release"},"iswilljr.enter-search":{"json":{"id":"iswilljr.enter-search","name":"Enter Search","version":"v1.2.0","developer":"iswilljr","description":"Search levels on enter in the search page","settings":{"enterSearch":{"type":"keybind","name":"Enter Search","description":"Search when you press enter in the level search page","default":"Enter","category":"universal","allow-in-text-inputs":true}},"links":{"source":"https://github.com/iswilljr/enter-search-gd"},"tags":["content","customization","interface","utility"],"issues":{"info":"If you find any bugs or have any suggestions, create an issue on github","url":"https://github.com/iswilljr/enter-search-gd/issues"}},"about":"# Enter Search\n\nSearch levels when you press enter in the level search page."},"ziegenhainy.xxlify":{"json":{"id":"ziegenhainy.xxlify","name":"XXLify","version":"v1.3.6","developer":"Ziegenhainy","description":"Long levels get more Xs in length","settings":{"maximum-xs":{"name":"Maximum Xs","description":"How many Xs you can have before an L","type":"int","default":10,"max":100,"min":1,"control":{"slider":false}},"xxl-scaling":{"name":"XXL Scaling","description":"How long levels need to be to get a longer label. The length of the level needs to be multiplied by this number to get a longer Label. (e.g. at 1.5, XL is 2 minutes, XXl is 3 minutes, XXXL is 4,5 minutes etc.)","type":"float","default":2,"max":10,"min":1.1},"use-power-notation":{"name":"Use power notation","description":"If enabled, levels above the maximum X limit will be displayed using power notation, i.e. \"XXXL\" becomes \"X^3L\"","type":"bool","default":true},"xxl-plus":{"name":"Enable XXL+","description":"If enabled, levels that are beyond halfway to the next XXL label get a + added to the length","type":"bool","default":true},"long-plus":{"name":"Enable Long+","description":"If enabled, levels that are longer than 1m30s will be Long+","type":"bool","default":true},"use-color":{"name":"Use colored label","description":"Enables a colored label","type":"bool","default":true},"label-color":{"name":"Label Color","description":"Color that the XXL label will have","type":"color","default":"#880000"},"maximum-color":{"name":"Maximum color length","description":"Length in minutes at which the color has been reached","type":"int","default":60,"min":0}},"tags":["customization","enhancement","offline"],"issues":{"info":"Report issues to the Github Repo!","url":"https://github.com/Ziegenhainy/XXLify/issues"}},"about":"# Welcome to XXLify!\n\nThis mod changes the duration of levels longer than 4 minutes, and 8 minutes, and so on!\nThe mod adds an additional X for each doubling in length after 4 minutes.\nFor example, a 5 minute level is XXL, a 9 Minute level is XXXL, and a 100 Hour long level is **XXXXXXXXXXL**\nIf you do not like the scaling, you can customize it yourself!\n\n## Features\n* Customizable XXL lengths, incase it gets too crowded\n* Customizable Scaling for XXL levels.\n* <cx>Colored</c> length labels\n* Power Notation for hugely giant levels\n\nI also used code from CVolton's  [BetterInfo](https://github.com/Cvolton/betterinfo-geode/) mod to get levels before 2.2 to work, check it out!\n\n![Cat](/ziegenhainy.xxlify/cat.png)","changelog":"# v1.3.6  \n* Fixed levels having incorrect length label by stealing more code from CVolton. \n  \n# v1.3.5\n* Updated for Geode 5.3.0\n\n# v1.3.4\n* Fixed XXL Label sometimes being wrong\n\n# v1.3.3  \n* Long+  \n\n# v1.3.2\n* Update to geode 4.0.1\n\n# v1.3.1\n* Update to geode 4.0.0-beta.1\n* Shortened Description\n* Removed Repository\n\n# v1.3.0\n* Update to geode 3.4.0\n* Updated setting defaults\n* Added custom XXL scaling\n* Added linewrapping\n* Updated maximum Xs to 100\n* Macos Support\n\n# v1.2.3\n* Update to geode 3.1.1\n* Added Color!\n* Added Cat\n* Updated About Section\n* Added some links\n\n# v1.2.2\n* Added Red\n* Updated mod description\n* Changed max Xs setting controls\n\n# v1.2.1\n* Update to geode 3.0.0\n* Changed power notation setting to above maximum Xs\n\n# v1.2.0\n* Added setting for maximum Xs\n* Added power notation (disabled by default)\n* Added XLL plus (disabled by default)\n\n# v1.1.2\n* Fixed occasional-er crashes\n\n# v1.1.1\n* Fixed occasional crashes\n\n# v1.1.0\n* 2.1 and earlier levels now supported! Thanks to CVolton's [BetterInfo](https://github.com/Cvolton/betterinfo-geode/) mod!\n\n# v1.0.1\n* very minor improvements\n* New logo\n\n# v1.0.0\n* Initial release with such features as: The entire thing working perfectly with 2.2 levels but not on 2.1"},"abb2k.custom_icon_size":{"json":{"id":"abb2k.custom_icon_size","name":"Custom icon size","version":"v1.0.9","developer":"abb2k","description":"change the size of your icons!","settings":{"mod-enabled":{"type":"bool","default":true,"name":"Enable","description":"Enables/Disables the mod"},"icon-size-overall":{"type":"float","default":1,"min":0,"max":10,"control":{"slider":true},"name":"Overall size","description":"Changes the size of the icon (irrelevant if \"Split X & Y\" is on)","enable-if":"mod-enabled"},"icon-size-extra-enabled":{"type":"bool","default":false,"name":"Split X & Y","description":"Whether to split the X & Y or not"},"icon-size-x":{"type":"float","default":1,"min":0,"enable-if":"mod-enabled && icon-size-extra-enabled","max":10,"control":{"slider":true},"name":"Scale X","description":"The scale of the icon on the X axis"},"icon-size-y":{"type":"float","default":1,"min":0,"enable-if":"mod-enabled && icon-size-extra-enabled","max":10,"control":{"slider":true},"name":"Scale Y","description":"The scale of the icon on the Y axis"}},"tags":["joke"]},"about":"# Custom icon size\n\nThis mod allows you to change the size of your icons to whatever u want!\n\nThis will NOT change the hitbox, just the visuals!","changelog":"# 1.0.9\n- updated for geode V5\n\n# 1.0.8\n- updated for geode V5 beta\n\n# 1.0.7\n- reupload mod to attempt fixing update issue\n\n# 1.0.6\n- iOS support\n\n# 1.0.5\n- updated the mod for geode v4.0.0-beta.1\n\n# 1.0.4\n- updated the mod for geode v4.0.0-alpha.1\n\n# 1.0.3\n- fixed some more rotation related bugs\n\n# 1.0.2\n- fixed issue with platformer player not flipping\n\n# 1.0.1\n- fixed the mod lol\n\n# 1.0.0\n- Initial release! :D"},"lilnibblit.chestalert":{"json":{"id":"lilnibblit.chestalert","name":"Chest Alert","version":"v1.0.7","developer":"dotnet","description":"A mod that alerts when chests are ready.","links":{"source":"https://github.com/lilnibblit/Chest-Alert","homepage":"https://dotnetx86.github.io/blackpencil/chestalert"},"tags":["interface","enhancement"]},"about":"# Chest Alert\n\nThis mod spawns exclamation mark near the chests button if you have chest(s) ready.\n\n# Credits\n\n- [Jouca](user:7026949) - Creating GDUtils so I can use their code.","changelog":"# Changelog\n## <cg>v1.0.2</c>\n* ex mark now dissapears after opening all chests\n\n## <cg>v1.0.1</c>\n* changed $execute to $on_mod(Loaded)\n\n## <cg>v1.0.0</c>\n* Initial Release"}};
+    })();
+    // Geode.port(id, options, setup): a ported mod made from its mod.json.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      Geode.port = function (id, options, setup) {
+        const data = Geode.modData[id] || { json: { id } };
+        return Geode.defineMod(data.json, { about: data.about, changelog: data.changelog, logo: "logo-" + id, ...options }, setup);
+      };
     })();
     // Geode Web: Geode's UI helpers on top of the cocos UI kit
     // (GDModLoader.cocos): sprites, anchored positions, axis layouts,
@@ -18201,6 +18222,1097 @@ self.onmessage = async ({ data: e }) => {
           return {};
         };
       }
+    })();
+    // Geode Web: what the Geode mods share. The running PlayLayer and
+    // PauseLayer (PlayLayer::get()), member offsets from Geode's 2.2081
+    // bindings, GJGameLevel values, and the Node IDs mod (geode.node-ids):
+    // IDs and Geode's extra menus for the layers the mods change.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const loader = Geode.loader,
+        mem = Geode.mem;
+      Object.assign(loader.addresses, {
+        "PauseLayer::onQuit": 0x77ebc0,
+        "PauseLayer::tryQuit": 0x77e9c0,
+        "EndLevelLayer::onHideLayer": 0x5353e0,
+        "EndLevelLayer::onReplay": 0x534e80,
+        "EndLevelLayer::onMenu": 0x535090,
+        "PauseLayer::keyDown": 0x77ed10,
+        "EditorPauseLayer::customSetup": 0x4da550,
+        "EditLevelLayer::init": 0x4d5440,
+        "LevelSearchLayer::init": 0x70c190,
+        "LevelSearchLayer::onSearch": 0x711730,
+        "GJGarageLayer::init": 0x673050,
+        "GameStatsManager::hasUserCoin": 0x5dfce0,
+        "GameStatsManager::hasPendingUserCoin": 0x5dfe60,
+        "PlayLayer::showNewBest": 0x7a9550,
+        "PlayLayer::~PlayLayer": 0x7a57b0,
+      });
+      // Member offsets (Windows 2.2081, checked against the values the port
+      // already relies on).
+      const OFF = {
+        // GJBaseGameLayer
+        level: 0x878,
+        player1: 0xda0,
+        player2: 0xda8,
+        attempts: 0x3084,
+        isPlatformer: 0x309e,
+        startPosObject: 0x3188,
+        isPracticeMode: 0x31f0,
+        isTestMode: 0x3230,
+        levelEndAnimationStarted: 0x3578,
+        // PlayLayer
+        attemptLabel: 0x38d8,
+        percentageLabel: 0x38e0,
+        progressBar: 0x38f0,
+        progressFill: 0x38f8,
+        progressWidth: 0x3900,
+        progressHeight: 0x3904,
+        jumps: 0x3970,
+        hasCompletedLevel: 0x397d,
+        lastAttemptPercent: 0x3980,
+        attemptTime: 0x39c0,
+        isPaused: 0x39ef,
+        infoLabel: 0x39f8,
+        // PlayerObject
+        isDead: 0x9c0,
+        // GameObject
+        objectID: 0x40c,
+        positionX: 0x3b8,
+        // StartPosObject / LevelSettingsObject
+        disableStartPos: 0x173,
+      };
+      // GJGameLevel members (SeedValueRSV values sit 8 bytes in).
+      const LV = {
+        levelID: 0x150,
+        levelName: 0x158,
+        creatorName: 0x1b8,
+        objectCount: 0x2b4,
+        workingTime: 0x2cc,
+        workingTime2: 0x2d0,
+        attempts: 0x2f8,
+        jumps: 0x304,
+        clicks: 0x310,
+        attemptTime: 0x31c,
+        normalPercent: 0x328,
+        newNormalPercent2: 0x348,
+        practicePercent: 0x34c,
+        levelLength: 0x358,
+        stars: 0x390,
+        coins: 0x398,
+        coinsVerified: 0x3a4,
+        firstCoinVerified: 0x3cc,
+        secondCoinVerified: 0x3d8,
+        thirdCoinVerified: 0x3e4,
+        levelType: 0x454,
+        personalBests: 0x4a8,
+        bestTime: 0x514,
+        bestPoints: 0x548,
+        demon: 0x380,
+      };
+      const LEVEL_TYPE = { Local: 1, Editor: 2, Saved: 3, SearchResult: 4 };
+      const game = {
+        OFF,
+        LV,
+        LEVEL_TYPE,
+        playLayer: 0,
+        pauseLayer: 0,
+        level: 0,
+        // GJGameLevel values of the level being played (or `level`).
+        levelInt: (name, level = game.level) => (level ? mem.i32(level + LV[name]) : 0),
+        levelString: (name, level = game.level) => (level ? mem.gdString(level + LV[name]) : ""),
+        isPlatformer: () => !!game.playLayer && !!mem.u8(game.playLayer + OFF.isPlatformer),
+        isPractice: () => !!game.playLayer && !!mem.u8(game.playLayer + OFF.isPracticeMode),
+        isTestMode: () => !!game.playLayer && !!mem.u8(game.playLayer + OFF.isTestMode),
+        isPaused: () => !!game.playLayer && !!mem.u8(game.playLayer + OFF.isPaused),
+        hasCompleted: () => !!game.playLayer && !!mem.u8(game.playLayer + OFF.hasCompletedLevel),
+        player: (n = 1) => (game.playLayer ? mem.ptr(game.playLayer + (n === 2 ? OFF.player2 : OFF.player1)) : 0),
+        member: (name) => (game.playLayer ? mem.ptr(game.playLayer + OFF[name]) : 0),
+        uiLayer: () => (game.playLayer ? Geode.member(game.playLayer, "UILayer", "GJBaseGameLayer.uiLayer", 0x3400, 0x3700) : 0),
+        // GameManager game variables ("0040" show percentage...).
+        gameVariable(call, key) {
+          const ui = loader.cocos(call);
+          return !!(ui.inv("GameManager::getGameVariable", [ui.gameManager(), { str: key }]).value & 255);
+        },
+      };
+      Geode.game = game;
+
+      // Node IDs: Geode's NodeIDs mod sets these before other mods run (its
+      // hooks are innermost). Shown in the list like the real one.
+      const nodeIds = Geode.defineMod(
+        {
+          id: "geode.node-ids",
+          name: "Node IDs",
+          version: "v1.23.3",
+          developers: ["Geode Team"],
+          description: "Standard node IDs to be used by other mods.",
+          links: { source: "https://github.com/geode-sdk/NodeIDs" },
+          tags: ["api"],
+        },
+        {
+          internal: true,
+          about: "# Node IDs\n\nAdds **node IDs** and layouts to the game's menus so mods can find and add to them reliably, like the real Node IDs mod.\n\nIn the web version it covers the menus the Geode Web mods use: the main menu, the pause menu (with its left, right and bottom button menus), the level's UI layer, the level info screen and the level end screen.",
+        },
+      );
+      const FIRST = 10000; // innermost: IDs exist before the other mods' code runs
+      const ids = Geode.ids;
+
+      nodeIds.hook(
+        "PlayLayer::init",
+        (call) => {
+          const layer = call.arg(0);
+          game.playLayer = layer;
+          game.level = call.arg(1);
+          game.pauseLayer = 0;
+          call.callOriginal();
+          if (!(call.result() & 255)) return;
+          const ui = Geode.cocos(call);
+          ui.setID(layer, "PlayLayer");
+          for (const [name, id] of [["progressBar", "progress-bar"], ["percentageLabel", "percentage-label"], ["attemptLabel", "attempt-label"], ["infoLabel", "debug-text"]]) {
+            const node = mem.ptr(layer + OFF[name]);
+            if (node) ui.setID(node, id);
+          }
+          const uiLayer = game.uiLayer();
+          if (uiLayer) {
+            ui.setID(uiLayer, "UILayer");
+            const menus = ui.children(uiLayer).filter((child) => ui.className(child) === "CCMenu");
+            if (menus[0]) ui.setID(menus[0], "pause-button-menu");
+            if (menus[1]) ui.setID(menus[1], "checkpoint-menu");
+          }
+          Geode.events.send("play-layer-init", ui, layer);
+        },
+        { priority: FIRST },
+      );
+      // (PlayLayer::onExit also runs when the game pauses.)
+      for (const name of ["PlayLayer::onQuit", "PlayLayer::~PlayLayer"]) {
+        nodeIds.hook(name, (call) => {
+          if (call.arg(0) === game.playLayer) {
+            Geode.events.send("play-layer-exit", game.playLayer);
+            game.playLayer = 0;
+            game.level = 0;
+            game.pauseLayer = 0;
+          }
+        }, { priority: -FIRST });
+      }
+      // The "Testmode" label the game adds next to the attempts.
+      nodeIds.hook(
+        "PlayLayer::updateTestModeLabel",
+        (call) => {
+          call.callOriginal();
+          const ui = Geode.cocos(call);
+          for (const child of ui.children(call.arg(0))) {
+            if (ui.className(child) === "CCLabelBMFont" && !ui.getID(child)) {
+              const [x, y] = ui.getPos(child),
+                [w, h] = ui.winSize();
+              if (y > h * 0.8 && x > w * 0.3 && x < w * 0.7 && mem.ptr(call.arg(0) + OFF.percentageLabel) !== child) ui.setID(child, "testmode-label");
+            }
+          }
+        },
+        { priority: FIRST },
+      );
+
+      // PauseLayer: IDs, and Geode's left/right/bottom button menus with the
+      // options button moved into the right one (NodeIDs/PauseLayer.cpp).
+      nodeIds.hook(
+        "PauseLayer::customSetup",
+        (call) => {
+          const layer = call.arg(0);
+          call.callOriginal();
+          game.pauseLayer = layer;
+          try {
+            pauseLayerIDs(Geode.cocos(call), layer);
+          } catch (idError) {
+            Geode.log.error("PauseLayer IDs failed:", idError);
+          }
+        },
+        { priority: FIRST },
+      );
+      for (const name of ["PauseLayer::onResume", "PlayLayer::resume", "PlayLayer::resumeAndRestart"]) {
+        nodeIds.hook(name, (call) => {
+          call.callOriginal();
+          game.pauseLayer = 0;
+        }, { priority: -FIRST });
+      }
+      function pauseLayerIDs(ui, layer) {
+        const [w, h] = ui.winSize(),
+          children = ui.children(layer);
+        ui.setID(layer, "PauseLayer");
+        const cls = (node) => ui.className(node);
+        const bg = children.find((c) => cls(c) === "CCScale9Sprite");
+        if (bg) ui.setID(bg, "background");
+        const labels = children.filter((c) => cls(c) === "CCLabelBMFont");
+        const title = labels.find((label) => ui.getPos(label)[1] > h * 0.85);
+        if (title) ui.setID(title, "level-name");
+        const menus = children.filter((c) => cls(c) === "CCMenu");
+        const center = menus.sort((a, b) => ui.children(b).length - ui.children(a).length)[0];
+        if (center) ui.setID(center, "center-button-menu");
+        const sliders = children.filter((c) => cls(c) === "Slider").sort((a, b) => ui.getPos(a)[0] - ui.getPos(b)[0]);
+        if (sliders[0]) ui.setID(sliders[0], "music-slider");
+        if (sliders[1]) ui.setID(sliders[1], "sfx-slider");
+        const bars = children.filter((c) => cls(c) === "CCSprite" && ui.scaledSize(c)[0] > 200).sort((a, b) => ui.getPos(b)[1] - ui.getPos(a)[1]);
+        if (bars.length === 1) ui.setID(bars[0], "progress-bar");
+        else if (bars.length >= 2) {
+          ui.setID(bars[0], "normal-progress-bar");
+          ui.setID(bars[1], "practice-progress-bar");
+        }
+        // Percent labels sit on the bars, mode labels above them.
+        for (const label of labels) {
+          if (label === title) continue;
+          const [lx, ly] = ui.getPos(label);
+          for (const [i, bar] of bars.entries()) {
+            const [, by] = ui.getPos(bar);
+            const prefix = bars.length === 1 ? "" : i === 0 ? "normal-" : "practice-";
+            if (Math.abs(ly - by) < 3 && Math.abs(lx - w / 2) < 5) ui.setID(label, prefix + "progress-label");
+            else if (ly - by > 10 && ly - by < 30 && Math.abs(lx - w / 2) < 5) ui.setID(label, prefix + "mode-label");
+          }
+        }
+        // Center menu buttons, by position (the options button is the one
+        // away from the row).
+        let options = 0;
+        if (center) {
+          const items = ui.children(center),
+            rowY = items.map((item) => ui.getPos(item)[1]).sort((a, b) => a - b)[Math.floor(items.length / 2)];
+          const row = items.filter((item) => Math.abs(ui.getPos(item)[1] - rowY) < 20).sort((a, b) => ui.getPos(a)[0] - ui.getPos(b)[0]);
+          options = items.find((item) => !row.includes(item)) || 0;
+          const play = row.reduce((best, item) => (ui.scaledSize(item)[0] > ui.scaledSize(best || item)[0] + 5 ? item : best || item), 0);
+          const at = row.indexOf(play);
+          if (play) ui.setID(play, "play-button");
+          if (at > 0) ui.setID(row[at - 1], "practice-button");
+          if (at > 1) ui.setID(row[at - 2], "edit-button");
+          ["exit-button", "retry-button", "full-restart-button"].forEach((id, i) => row[at + 1 + i] && ui.setID(row[at + 1 + i], id));
+        }
+        // The new menus.
+        const makeMenu = (id, x, y, width, height, layout) => {
+          const menu = ui.menu();
+          ui.setID(menu, id);
+          ui.size(menu, width, height);
+          ui.ignoreAnchor(menu, false);
+          ui.anchor(menu, 0.5, 0.5);
+          ui.pos(menu, x, y);
+          ui.add(layer, menu, 10);
+          Geode.Layout.set(menu, layout);
+          return menu;
+        };
+        const column = () => Geode.Layout.column({ gap: 5.5, align: "end", reverse: true, autoScale: true });
+        const left = makeMenu("left-button-menu", 36, h / 2, 40, h - 40, column()),
+          right = makeMenu("right-button-menu", w - 36, h / 2, 40, h - 40, column());
+        makeMenu("bottom-button-menu", w / 2, 33, 400, 30, Geode.Layout.row({ gap: 4 }));
+        if (options) {
+          ui.setID(options, "options-button");
+          switchToMenu(ui, options, right);
+        }
+        ui.updateLayout(left);
+        ui.updateLayout(right);
+        Geode.events.send("node-ids:PauseLayer", ui, layer);
+      }
+      // geode::cocos::switchToMenu: moves a button into another menu.
+      function switchToMenu(ui, node, menu) {
+        ui.retain(node);
+        ui.inv("cocos2d::CCNode::removeFromParentAndCleanup", [node, 0]);
+        ui.add(menu, node);
+        ui.release(node);
+      }
+      Geode.switchToMenu = switchToMenu;
+    })();
+    // Startpos Switcher (capeling.startpos_switcher), ported from
+    // github.com/capeling/Startpos-Switcher: switch between a level's start
+    // positions with Q/E (keybinds) or the arrows under the level.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        OFF = game.OFF,
+        START_POS = 31,
+        FADE_TAG = 676767677;
+      // StartPosObject::m_startSettings (found by class, then remembered).
+      const startSettings = (object) => Geode.member(object, "LevelSettingsObject", "StartPosObject.startSettings", 0x500, 0x800);
+
+      Geode.port("capeling.startpos_switcher", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key),
+          opacity = () => Math.round((setting("opacity") / 100) * 255);
+
+        // HookPlayLayer
+        mod.modify("PlayLayer", {
+          fields: () => ({ startPosObjects: [], startPosIdx: 0 }),
+          init(self) {
+            self.fields;
+            return self.orig();
+          },
+          addObject(self, obj) {
+            if (mem.i32(obj + OFF.objectID) === START_POS) {
+              const settings = startSettings(obj);
+              if (!(settings && mem.u8(settings + OFF.disableStartPos)) || !setting("ignoreDisabled")) self.fields.startPosObjects.push(obj);
+            }
+            self.orig();
+          },
+          createObjectsFromSetupFinished(self) {
+            self.orig();
+            const fields = self.fields;
+            fields.startPosObjects.sort((a, b) => mem.f64(a + OFF.positionX) - mem.f64(b + OFF.positionX));
+            const current = mem.ptr(self.ptr + OFF.startPosObject);
+            if (current) fields.startPosIdx = fields.startPosObjects.indexOf(current) + 1;
+            updateUI(self.ui, self.ptr);
+          },
+        });
+        function updateStartPos(ui, layer, idx) {
+          const fields = mod.fields("PlayLayer", layer);
+          if (!fields || !fields.startPosObjects.length || game.isPaused()) return;
+          const count = fields.startPosObjects.length;
+          if (idx < 0) idx = count;
+          if (idx > count) idx = 0;
+          mem.setU8(layer + OFF.isTestMode, idx === 0 ? 0 : 1);
+          ui.inv("PlayLayer::updateTestModeLabel", [layer]);
+          fields.startPosIdx = idx;
+          const object = idx > 0 ? fields.startPosObjects[idx - 1] : 0;
+          // setStartPosObject
+          const old = mem.ptr(layer + OFF.startPosObject);
+          if (object !== old) {
+            if (object) ui.retain(object);
+            if (old) ui.release(old);
+            mem.setPtr(layer + OFF.startPosObject, object);
+          }
+          if (game.isPractice()) ui.inv("PlayLayer::resetLevelFromStart", [layer]);
+          ui.inv("PlayLayer::resetLevel", [layer]);
+          ui.inv("PlayLayer::startMusic", [layer]);
+          updateUI(ui, layer);
+        }
+
+        // HookUILayer
+        mod.modify("UILayer", {
+          fields: () => ({ switcherMenu: 0, switcherLabel: 0, prevBtn: 0, nextBtn: 0, firstUpdate: true }),
+          init(self, baseGame) {
+            if (!self.origBool()) return false;
+            const ui = self.ui;
+            if (ui.className(baseGame) !== "PlayLayer") return true;
+            const fields = self.fields,
+              [w] = ui.winSize();
+            const menu = ui.menu();
+            ui.setID(menu, "capeling.startpos_switcher/menu");
+            const label = ui.label("0/0", "bigFont.fnt", 0.6);
+            ui.setID(label, "capeling.startpos_switcher/idx-label");
+            const nextSpr = ui.frame("GJ_arrow_02_001.png"),
+              prevSpr = ui.frame("GJ_arrow_02_001.png");
+            ui.scale(nextSpr, 0.6);
+            ui.scale(prevSpr, 0.6);
+            ui.flipX(nextSpr);
+            const next = ui.button(nextSpr, (k) => {
+              const f = mod.fields("PlayLayer", baseGame);
+              updateStartPos(k, baseGame, f.startPosIdx + 1);
+            });
+            const prev = ui.button(prevSpr, (k) => {
+              const f = mod.fields("PlayLayer", baseGame);
+              updateStartPos(k, baseGame, f.startPosIdx - 1);
+            });
+            ui.setID(next, "capeling.startpos_switcher/next-btn");
+            ui.setID(prev, "capeling.startpos_switcher/prev-btn");
+            ui.add(menu, prev);
+            ui.add(menu, label);
+            ui.add(menu, next);
+            ui.size(menu, 200, 30);
+            ui.pos(menu, w / 2, 17);
+            ui.setLayout(menu, Geode.Layout.row({ autoScale: false, gap: 10 }));
+            if (setting("hideBtns")) {
+              ui.visible(prev, false);
+              ui.visible(next, false);
+            }
+            ui.add(self.ptr, menu);
+            Object.assign(fields, { switcherMenu: menu, switcherLabel: label, prevBtn: prev, nextBtn: next, firstUpdate: true });
+            updateUI(ui, baseGame);
+            return true;
+          },
+        });
+        function updateUI(ui, layer) {
+          const uiLayer = game.uiLayer(),
+            fields = mod.fields("PlayLayer", layer),
+            ui2 = uiLayer && mod.fields("UILayer", uiLayer);
+          if (!fields || !ui2 || !ui2.switcherMenu) return;
+          const menu = ui2.switcherMenu;
+          if (!fields.startPosObjects.length) {
+            ui.visible(menu, false);
+            return;
+          }
+          ui.visible(menu, true);
+          ui.setText(ui2.switcherLabel, fields.startPosIdx + "/" + fields.startPosObjects.length);
+          ui.limitWidth(ui2.switcherLabel, 40, 0.6, 0);
+          ui.updateLayout(menu);
+          ui.stopActions(menu);
+          const fade = (time, to) => ui.ptr("cocos2d::CCEaseSineInOut::create", [ui.ptr("cocos2d::CCFadeTo::create", [{ f32: time }, to])]);
+          if (ui2.firstUpdate && setting("hide")) {
+            ui.runAction(menu, ui.ptr("cocos2d::CCFadeTo::create", [{ f32: 0 }, opacity()]));
+          } else {
+            const sequence = ui.ptr("cocos2d::CCSequence::createWithTwoActions", [
+              fade(0.3, 255),
+              ui.ptr("cocos2d::CCSequence::createWithTwoActions", [ui.ptr("cocos2d::CCDelayTime::create", [{ f32: 0.5 }]), fade(0.5, opacity())]),
+            ]);
+            ui.runAction(menu, sequence);
+          }
+          ui2.firstUpdate = false;
+        }
+
+        // Keybinds (KeybindSettingPressedEventV3 on the UILayer).
+        for (const [key, step] of [["leftSwitch", -1], ["rightSwitch", 1]]) {
+          mod.onKeybind(key, (down, repeat) => {
+            if (!down || repeat || !game.playLayer) return;
+            Geode.loader.runOnGameThread((call) => {
+              const layer = game.playLayer,
+                fields = layer && mod.fields("PlayLayer", layer);
+              if (fields) updateStartPos(Geode.cocos(call), layer, fields.startPosIdx + step);
+            });
+          });
+        }
+      });
+    })();
+    // Run Info (mat.run-info), ported from github.com/matcool/geode-mods
+    // (run-info/main.cpp): shows "Practice"/"Testmode" and where the
+    // current run started ("From 34%") in a corner while you play.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        OFF = game.OFF;
+      const truncate = (x, precision) => Math.floor(x * 10 ** precision) / 10 ** precision;
+
+      Geode.port("mat.run-info", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        const currentPercent = (ui, layer) => ui.inv("PlayLayer::getCurrentPercent", [layer]).f32;
+
+        // RunInfoWidget: a status row (icon and mode) over the "From x%".
+        function createWidget(ui, layer, fields) {
+          const widget = ui.node();
+          ui.setID(widget, "mat.run-info/RunInfoWidget");
+          const status = ui.label("Practice", "bigFont.fnt", 0.5),
+            info = ui.label("From 0%", "bigFont.fnt", 0.4);
+          ui.setID(status, "mat.run-info/mode-label");
+          ui.setID(info, "mat.run-info/from-label");
+          ui.add(widget, status, 1);
+          ui.add(widget, info);
+          fields.widget = { node: widget, status, info, icon: 0, wasPractice: true };
+          resetIcon(ui, fields.widget, "checkpoint_01_001.png");
+          ui.add(layer, widget, 999);
+          return fields.widget;
+        }
+        function resetIcon(ui, w, frame) {
+          if (w.icon) ui.remove(w.icon);
+          w.icon = ui.frame(frame);
+          ui.setID(w.icon, "mat.run-info/icon-sprite");
+          ui.scale(w.icon, ui.scaledSize(w.status)[1] / ui.getSize(w.icon)[1]);
+          ui.add(w.node, w.icon);
+          applyLook(ui, w);
+        }
+        // CCNodeRGBA cascading: opacity and color on every part.
+        function applyLook(ui, w) {
+          for (const part of [w.status, w.info, w.icon]) {
+            if (!part) continue;
+            ui.opacity(part, setting("opacity"));
+            ui.color(part, setting("color").slice(0, 3));
+          }
+        }
+        // update_position: lays the widget out for its corner.
+        function updatePosition(ui, layer, fields) {
+          const w = fields.widget;
+          if (!w || !setting("enabled")) return;
+          const position = setting("position"),
+            top = position === "Top Left" || position === "Top Right",
+            left = position === "Top Left" || position === "Bottom Left";
+          let showIcon = setting("show-icon");
+          if (!setting("use-start-pos") && !w.wasPractice) showIcon = false;
+          const showStatus = setting("show-mode"),
+            // "From x%" means nothing in platformer levels.
+            showInfo = !game.isPlatformer() && setting("show-from");
+          ui.visible(w.icon, showIcon);
+          ui.visible(w.status, showStatus);
+          ui.visible(w.info, showInfo);
+          // The top row: icon and mode (reversed on the right side).
+          const gap = 2,
+            topParts = [w.icon, w.status].filter((part) => ui.isVisible(part));
+          if (!left) topParts.reverse();
+          const sizes = topParts.map((part) => ui.scaledSize(part)),
+            topWidth = sizes.reduce((sum, [pw]) => sum + pw, 0) + gap * Math.max(0, topParts.length - 1),
+            topHeight = sizes.reduce((max, [, ph]) => Math.max(max, ph), 0),
+            [infoW, infoH] = showInfo ? ui.scaledSize(w.info) : [0, 0];
+          const sameLine = setting("same-line") && !showStatus;
+          let width, height;
+          if (sameLine) {
+            width = topWidth + (showInfo && topParts.length ? gap : 0) + infoW;
+            height = Math.max(topHeight, infoH);
+          } else {
+            width = Math.max(topWidth, infoW);
+            height = topHeight + infoH;
+          }
+          ui.size(w.node, width, height);
+          let x = left ? 0 : width - topWidth;
+          const topY = sameLine ? height / 2 : height - topHeight / 2;
+          if (sameLine && !left) x = width - topWidth;
+          topParts.forEach((part, i) => {
+            ui.anchor(part, 0.5, 0.5);
+            ui.pos(part, x + sizes[i][0] / 2, topY);
+            x += sizes[i][0] + gap;
+          });
+          ui.anchor(w.info, 0.5, 0.5);
+          if (sameLine) {
+            const infoX = left ? topWidth + (topParts.length ? gap : 0) + infoW / 2 : width - topWidth - (topParts.length ? gap : 0) - infoW / 2;
+            ui.pos(w.info, infoX, height / 2);
+          } else ui.pos(w.info, left ? infoW / 2 : width - infoW / 2, infoH / 2);
+          const [winW, winH] = ui.winSize();
+          ui.anchor(w.node, left ? 0 : 1, top ? 1 : 0);
+          ui.pos(w.node, left ? 5 : winW - 5, top ? winH - 2 : 4);
+          ui.scale(w.node, setting("scale"));
+        }
+        function updateLabels(ui, layer, fields) {
+          const w = fields.widget;
+          if (!w || !setting("enabled")) return;
+          if (game.isPractice()) {
+            ui.setText(w.status, "Practice");
+            if (!w.wasPractice) resetIcon(ui, w, "checkpoint_01_001.png");
+            w.wasPractice = true;
+          } else if (game.isTestMode()) {
+            ui.setText(w.status, "Testmode");
+            if (w.wasPractice) resetIcon(ui, w, "edit_eStartPosBtn_001.png");
+            w.wasPractice = false;
+          }
+          const decimal = setting("decimal-places");
+          ui.setText(w.info, "From " + truncate(fields.initialPercent, decimal).toFixed(decimal) + "%");
+          ui.visible(w.node, game.isPractice() || game.isTestMode());
+        }
+        // Hides GD's own "Testmode" label, like the mod.
+        function hideTestmodeLabel(ui, layer) {
+          const label = ui.getChildByID(layer, "testmode-label");
+          if (label) ui.visible(label, false);
+        }
+
+        mod.modify("PlayLayer", {
+          fields: () => ({ widget: null, initialPercent: 0, showInPercentage: false, showInProgressBar: false, mask: 0 }),
+          init(self) {
+            if (!self.origBool()) return false;
+            if (!setting("enabled")) return true;
+            const ui = self.ui,
+              fields = self.fields;
+            fields.showInPercentage = setting("show-in-percentage");
+            fields.showInProgressBar = setting("show-in-progress-bar");
+            hideTestmodeLabel(ui, self.ptr);
+            createWidget(ui, self.ptr, fields);
+            updateLabels(ui, self.ptr, fields);
+            updatePosition(ui, self.ptr, fields);
+            return true;
+          },
+          updateTestModeLabel(self) {
+            self.orig();
+            if (setting("enabled")) hideTestmodeLabel(self.ui, self.ptr);
+          },
+          resetLevel(self) {
+            self.orig();
+            const fields = self.fields;
+            fields.initialPercent = currentPercent(self.ui, self.ptr);
+            updateLabels(self.ui, self.ptr, fields);
+            updatePosition(self.ui, self.ptr, fields);
+          },
+          togglePracticeMode(self) {
+            self.orig();
+            updateLabels(self.ui, self.ptr, self.fields);
+            updatePosition(self.ui, self.ptr, self.fields);
+          },
+          updateProgressbar(self) {
+            self.orig();
+            const ui = self.ui,
+              fields = self.fields,
+              layer = self.ptr;
+            const off = game.isPlatformer() || !(game.isPractice() || game.isTestMode()) || !setting("enabled");
+            if (off) {
+              if (fields.mask) ui.visible(fields.mask, false);
+              return;
+            }
+            const from = fields.initialPercent,
+              to = currentPercent(ui, layer),
+              label = mem.ptr(layer + OFF.percentageLabel);
+            if (label && fields.showInPercentage) {
+              const decimal = setting("decimal-places");
+              ui.setText(label, truncate(from, decimal).toFixed(decimal) + "-" + truncate(to, decimal).toFixed(decimal) + "%");
+            }
+            // The run's start in the progress bar: the part before it is
+            // covered, so the bar fills from where the run started.
+            const bar = mem.ptr(layer + OFF.progressBar),
+              fill = mem.ptr(layer + OFF.progressFill);
+            if (bar && fill && fields.showInProgressBar) {
+              const width = mem.f32(layer + OFF.progressWidth),
+                height = mem.f32(layer + OFF.progressHeight);
+              if (!fields.mask) {
+                fields.mask = ui.layerColor([0, 0, 0, 255], 1, height);
+                ui.add(bar, fields.mask, 5);
+              }
+              const [, fy] = ui.getPos(fill),
+                [, fh] = ui.scaledSize(fill);
+              ui.size(fields.mask, Math.min(from, to) / 100 * width, fh);
+              ui.pos(fields.mask, 2, fy - fh * ui.getAnchor(fill)[1]);
+              ui.visible(fields.mask, from > 0);
+            }
+          },
+        });
+        for (const key of ["opacity", "color", "scale", "position", "show-icon", "show-mode", "show-from", "same-line", "use-start-pos", "decimal-places"]) {
+          mod.listenForSettingChanges(key, () =>
+            Geode.loader.runOnGameThread((call) => {
+              const layer = game.playLayer,
+                fields = layer && mod.fields("PlayLayer", layer);
+              if (!fields || !fields.widget) return;
+              const ui = Geode.cocos(call);
+              applyLook(ui, fields.widget);
+              updateLabels(ui, layer, fields);
+              updatePosition(ui, layer, fields);
+            }),
+          );
+        }
+      });
+    })();
+    // Golden Best (firee.goldenbest), ported from
+    // github.com/FireMario211/Golden-Best: the percentage (or the platformer
+    // timer) turns gold while you're beating your best.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        OFF = game.OFF;
+
+      Geode.port("firee.goldenbest", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        // Switching fonts rebuilds the label, so only do it on changes.
+        function setGold(ui, fields, gold) {
+          if (fields.gold === gold) return;
+          fields.gold = gold;
+          const label = fields.percentLabel,
+            [anchorX] = ui.getAnchor(label);
+          if (fields.doCustomColor) {
+            ui.color(label, gold ? fields.customColor : [255, 255, 255]);
+            return;
+          }
+          ui.inv("cocos2d::CCLabelBMFont::setFntFile", [label, { str: gold ? "goldFont.fnt" : "bigFont.fnt" }]);
+          ui.scale(label, gold ? fields.oldScale + 0.15 : fields.oldScale);
+          // RobTop won't let the Y position change, so the anchor moves.
+          ui.anchor(label, anchorX, gold ? fields.oldAnchorPoint - 0.05 : fields.oldAnchorPoint);
+        }
+        function shown() {
+          return !((!setting("practice-mode") && game.isPractice()) || (!setting("test-mode") && game.isTestMode()));
+        }
+        mod.modify("PlayLayer", {
+          fields: () => ({ initialized: false, oldScale: 1, oldAnchorPoint: -1, doCustomColor: false, customColor: [255, 255, 255], percentLabel: 0, gold: false }),
+          updateProgressbar(self) {
+            self.orig();
+            const ui = self.ui,
+              fields = self.fields,
+              layer = self.ptr;
+            if (!fields.initialized) {
+              fields.doCustomColor = setting("enable-colors");
+              fields.customColor = setting("custom-color").slice(0, 3);
+              const label = mem.ptr(layer + OFF.percentageLabel);
+              if (!label) return;
+              fields.percentLabel = label;
+              fields.oldScale = ui.getScale(label);
+              fields.initialized = true;
+              return;
+            }
+            if (game.isPlatformer()) return;
+            if (fields.oldAnchorPoint === -1) fields.oldAnchorPoint = ui.getAnchor(fields.percentLabel)[1];
+            if (!shown()) {
+              setGold(ui, fields, false);
+              return;
+            }
+            const percent = Math.floor(ui.inv("PlayLayer::getCurrentPercent", [layer]).f32);
+            setGold(ui, fields, percent > game.levelInt("normalPercent"));
+          },
+          updateTimeLabel(self, seconds, centiseconds) {
+            self.orig();
+            const ui = self.ui,
+              fields = self.fields;
+            if (!fields.percentLabel || !game.isPlatformer() || !setting("platformer-mode")) return;
+            if (fields.oldAnchorPoint === -1) fields.oldAnchorPoint = ui.getAnchor(fields.percentLabel)[1];
+            if (!shown()) {
+              setGold(ui, fields, false);
+              return;
+            }
+            const actualTime = self.int(1) + self.int(2) / 100,
+              bestTime = game.levelInt("bestTime");
+            setGold(ui, fields, actualTime < bestTime / 1000 || bestTime === 0);
+          },
+        });
+      });
+    })();
+    // Death Tracker (elohmrow.death_tracker), ported from
+    // github.com/abb2k/death-tracker: records where you die in every level
+    // (from 0 and in runs), new bests, sessions and playtime, and shows them
+    // in Death Tracker's window from the pause menu, the level page and the
+    // level end screen. The layout is the mod's default one.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const loader = Geode.loader,
+        mem = Geode.mem,
+        game = Geode.game,
+        OFF = game.OFF,
+        LV = game.LV;
+
+      Geode.port("elohmrow.death_tracker", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        // ------------------------------------------------------------ save
+        const levels = mod.getSavedValue("levels", {});
+        let saveTimer = 0;
+        function save() {
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(() => mod.setSavedValue("levels", levels), setting("quick-save") ? 0 : 500);
+        }
+        const emptyData = () => ({ deaths: {}, runs: {}, newBests: [], attempts: 0, playtime: { gen: 0, f0: 0, runs: 0, paused: 0, dead: 0 } });
+        // StatsManager::getLevelKey
+        function levelKey(level) {
+          const type = mem.i32(level + LV.levelType),
+            id = mem.i32(level + LV.levelID);
+          if (type === game.LEVEL_TYPE.Local) return "main-" + id;
+          if (type === game.LEVEL_TYPE.Editor || !id) return "local-" + mem.gdString(level + LV.levelName);
+          return String(id);
+        }
+        function levelData(level) {
+          const key = levelKey(level);
+          if (!levels[key]) levels[key] = { name: mem.gdString(level + LV.levelName), general: emptyData(), sessions: [] };
+          return levels[key];
+        }
+        // Sessions: per level play ("Exit level") or per game launch.
+        const launchSessions = new Set();
+        function currentSession(data, startNew) {
+          if (startNew || !data.sessions.length) {
+            data.sessions.push({ start: Date.now(), last: Date.now(), ...emptyData() });
+            if (data.sessions.length > 200) data.sessions.shift();
+          }
+          return data.sessions[data.sessions.length - 1];
+        }
+        function addRun(target, start, end, isNewBest) {
+          if (start === 0) {
+            target.deaths[end] = (target.deaths[end] || 0) + 1;
+            if (isNewBest && !target.newBests.includes(end)) target.newBests.push(end);
+          } else {
+            const key = start + "-" + end;
+            target.runs[key] = (target.runs[key] || 0) + 1;
+          }
+          target.attempts++;
+        }
+
+        // ------------------------------------------------------- tracking
+        const run = { data: null, session: null, start: 0, pendingStart: true, hasRespawned: true, beaten: false, best: 0, lastTime: 0 };
+        const tracking = () =>
+          run.data &&
+          !setting("safe-mode-v3") &&
+          !(setting("disable-practice-tracking") && game.isPractice()) &&
+          !(setting("disable-tracking-completed-levels") && game.levelInt("newNormalPercent2") === 100 && game.levelInt("levelType") === game.LEVEL_TYPE.Saved) &&
+          !(setting("cheat-detect") && window.Eclipse && window.Eclipse.isCheating && window.Eclipse.isCheating());
+        const percent = (ui) => Math.floor(ui.inv("PlayLayer::getCurrentPercent", [game.playLayer]).f32);
+        function saveRun(ui, end) {
+          if (!tracking()) return;
+          const fromZero = run.start === 0,
+            isNewBest = fromZero && end > run.best;
+          if (isNewBest) run.best = end;
+          addRun(run.data.general, run.start, end, isNewBest);
+          addRun(run.session, run.start, end, isNewBest);
+          run.session.last = Date.now();
+          save();
+        }
+        mod.modify("PlayLayer", {
+          init(self, level) {
+            if (!self.origBool()) return false;
+            const data = levelData(level),
+              key = levelKey(level),
+              perLevel = setting("session-method") === "Exit level";
+            run.data = data;
+            run.session = currentSession(data, perLevel || !launchSessions.has(key));
+            launchSessions.add(key);
+            data.name = mem.gdString(level + LV.levelName);
+            run.start = 0;
+            run.pendingStart = true;
+            run.hasRespawned = true;
+            run.beaten = false;
+            run.best = mem.i32(level + LV.normalPercent);
+            run.lastTime = performance.now();
+            return true;
+          },
+          resetLevel(self) {
+            self.orig();
+            run.beaten = false;
+            run.hasRespawned = true;
+            run.pendingStart = true;
+          },
+          // Where the run starts, once the player is at the start (position).
+          updateProgressbar(self) {
+            self.orig();
+            if (!run.pendingStart) return;
+            run.pendingStart = false;
+            run.start = game.isPlatformer() ? 0 : percent(self.ui);
+          },
+          destroyPlayer(self, player) {
+            self.orig();
+            if (!run.data || !player || !mem.u8(player + OFF.isDead) || !run.hasRespawned) return;
+            run.hasRespawned = false;
+            if (game.isPlatformer()) return;
+            saveRun(self.ui, percent(self.ui));
+          },
+          levelComplete(self) {
+            self.orig();
+            run.beaten = true;
+            if (!game.isPlatformer()) saveRun(self.ui, 100);
+          },
+          onQuit(self) {
+            save();
+            self.orig();
+          },
+        });
+        // Playtime: overall, from 0 or in runs, and paused / dead time.
+        loader.onFrame(() => {
+          const now = performance.now(),
+            dt = Math.min(1000, now - run.lastTime);
+          run.lastTime = now;
+          if (!game.playLayer || !tracking()) return;
+          const kind = game.isPaused() || run.beaten ? "paused" : !run.hasRespawned ? "dead" : null;
+          for (const target of [run.data.general, run.session]) {
+            if (kind) target.playtime[kind] += dt;
+            else {
+              target.playtime.gen += dt;
+              target.playtime[run.start === 0 ? "f0" : "runs"] += dt;
+            }
+          }
+        }, mod.loaderMod);
+        setInterval(() => game.playLayer && run.data && save(), 30000);
+
+        // ----------------------------------------------------- the window
+        // DTLayer with the default layout: level name, attempts, playtime,
+        // deaths from 0 and runs; then the selected session's.
+        const LABELS = [
+          { column: 0, span: 3, name: "level name", font: "goldFont.fnt", color: [255, 213, 118], scale: 0.5, align: "center", text: (d) => d.name + ":" },
+          { column: 0, name: "attempts", font: "chatFont.fnt", color: [170, 170, 170], scale: 0.65, text: (d) => "gd - " + d.gdAttempts + "\ndeath tracker - " + d.general.attempts },
+          { column: 0, name: "playtime", font: "gjFont17.fnt", color: [170, 170, 170], scale: 0.28, text: (d) => "overall - " + duration(d.general.playtime.gen) + "\nfrom 0: " + duration(d.general.playtime.f0) + "\nruns: " + duration(d.general.playtime.runs) + "\n \npaused time: " + duration(d.general.playtime.paused) + "\ndead time: " + duration(d.general.playtime.dead) },
+          { column: 1, name: "from 0", font: "bigFont.fnt", color: [64, 138, 98], scale: 0.35, list: (d) => deathList(d.general) },
+          { column: 2, name: "runs", font: "bigFont.fnt", color: [37, 86, 70], scale: 0.35, list: (d) => runList(d.general) },
+          { column: 3, span: 2, name: "Session Date", font: "bigFont.fnt", color: [255, 147, 44], scale: 0.35, align: "center", text: (d, s) => (s ? date(s.start) : "No Sessions") },
+          { column: 3, name: "session playtime", font: "gjFont17.fnt", color: [176, 150, 110], scale: 0.3, text: (d, s) => (s ? "overall: " + duration(s.playtime.gen) + "\nfrom 0: " + duration(s.playtime.f0) + "\nruns: " + duration(s.playtime.runs) + "\npaused time: " + duration(s.playtime.paused) + "\ndead time: " + duration(s.playtime.dead) : "") },
+          { column: 3, name: "session from 0", font: "bigFont.fnt", color: [160, 109, 60], scale: 0.35, list: (d, s) => (s ? deathList(s) : []) },
+          { column: 4, name: "session attempts", font: "chatFont.fnt", color: [156, 96, 46], scale: 0.7, text: (d, s) => "attempts: " + (s ? s.attempts : 0) },
+          { column: 4, name: "session runs", font: "bigFont.fnt", color: [102, 68, 31], scale: 0.35, list: (d, s) => (s ? runList(s) : []) },
+        ];
+        const COLUMN_WIDTHS = [120, 100, 100, 129, 125],
+          PAGES = [[0, 1, 2], [3, 4]],
+          NEW_BEST = [255, 230, 70];
+        function duration(ms) {
+          let s = Math.floor(ms / 1000);
+          const h = Math.floor(s / 3600),
+            m = Math.floor((s % 3600) / 60);
+          s %= 60;
+          return (h ? h + "h " : "") + (h || m ? m + "m " : "") + s + "s";
+        }
+        function date(time) {
+          const d = new Date(time),
+            pad = (n) => String(n).padStart(2, "0"),
+            twelve = setting("clock-format") === "12-hour",
+            hours = twelve ? ((d.getHours() + 11) % 12) + 1 : d.getHours();
+          return pad(d.getMonth() + 1) + "/" + pad(d.getDate()) + "/" + d.getFullYear() + " " + pad(hours) + ":" + pad(d.getMinutes()) + (twelve ? (d.getHours() < 12 ? "AM" : "PM") : "");
+        }
+        // "{per}% x{d}" lines, new bests highlighted, every other line lighter.
+        function deathList(target) {
+          const lines = Object.keys(target.deaths)
+            .map(Number)
+            .sort((a, b) => a - b)
+            .map((p, i) => ({ text: p + "% x" + target.deaths[p], newBest: target.newBests.includes(p), alt: i % 2 === 0 }));
+          return lines.length ? lines : [{ text: "No Deaths Found!" }];
+        }
+        function runList(target) {
+          const entries = Object.entries(target.runs)
+            .map(([key, n]) => [key.split("-").map(Number), n])
+            .sort((a, b) => a[0][0] - b[0][0] || a[0][1] - b[0][1]);
+          const out = [];
+          let prev = null;
+          entries.forEach(([[start, end], n], i) => {
+            if (prev !== null && prev !== start) out.push({ text: "----------" });
+            prev = start;
+            out.push({ text: start + "-" + end + "% x" + n, alt: i % 2 === 0 });
+          });
+          return out.length ? out : [{ text: "No Deaths Found!" }];
+        }
+
+        function openLayer(ui, level) {
+          if (!level) {
+            ui.notify("Error! No level data found!", "error");
+            return;
+          }
+          save();
+          const data = levelData(level);
+          data.gdAttempts = mem.i32(level + LV.attempts);
+          const [w, h] = ui.winSize(),
+            width = w - 150,
+            height = h - 30,
+            popup = ui.geodePopup(width, height, null);
+          ui.setID(popup.layer, "dt-layer");
+          const s = { popup, data, page: 0, session: data.sessions.length };
+          const areaW = width - 30,
+            areaH = height - 60;
+          const shadow = ui.layerColor([0, 0, 0, 100], areaW, areaH);
+          popup.place(shadow, "Center", [-areaW / 2, -areaH / 2 + 15]);
+          s.scroll = ui.scrollLayer(areaW, areaH);
+          popup.place(s.scroll.node, "Center", [-areaW / 2, -areaH / 2 + 15]);
+          // Session selector (bottom middle).
+          const sessionLabel = ui.label("", "bigFont.fnt", 0.45);
+          popup.place(sessionLabel, "Bottom", [0, 20]);
+          const arrow = (flip, dir) => {
+            const sprite = ui.frame("GJ_arrow_01_001.png");
+            ui.scale(sprite, 0.45);
+            if (flip) ui.flipX(sprite);
+            return ui.button(sprite, (k) => {
+              const count = data.sessions.length;
+              if (!count) return;
+              s.session = ((s.session - 1 + dir + count) % count) + 1;
+              render(k);
+            });
+          };
+          popup.place(arrow(false, -1), "Bottom", [-85, 20], true);
+          popup.place(arrow(true, 1), "Bottom", [85, 20], true);
+          // Page arrows (overall / session columns).
+          const pageButton = (flip, dir) => {
+            const sprite = ui.frame("GJ_arrow_03_001.png");
+            ui.scale(sprite, 0.6);
+            if (flip) ui.flipX(sprite);
+            return ui.button(sprite, (k) => {
+              s.page = (s.page + dir + PAGES.length) % PAGES.length;
+              render(k);
+            });
+          };
+          popup.place(pageButton(false, -1), "Left", [-2, 15], true);
+          popup.place(pageButton(true, 1), "Right", [2, 15], true);
+          // Reset this level's data.
+          const deleteSprite = ui.frame("GJ_deleteBtn_001.png");
+          ui.scale(deleteSprite, 0.6);
+          popup.place(
+            ui.button(deleteSprite, (k) =>
+              k.confirm("Delete", "Delete all of Death Tracker's data for this level?", "Cancel", "Delete", (k2, yes) => {
+                if (!yes) return;
+                Object.assign(data, { general: emptyData(), sessions: [] });
+                if (run.data === data) run.session = currentSession(data, true);
+                save();
+                s.session = data.sessions.length;
+                render(k2);
+              }),
+            ),
+            "BottomRight",
+            [-25, 20],
+            true,
+          );
+          function render(k) {
+            loader.cocosForgetTree(k.call, s.scroll.content);
+            k.clear(s.scroll.content);
+            const session = data.sessions[s.session - 1] || null;
+            k.setText(sessionLabel, data.sessions.length ? "Session " + s.session + "/" + data.sessions.length : "No Sessions");
+            const columns = PAGES[s.page],
+              total = columns.reduce((sum, c) => sum + COLUMN_WIDTHS[c], 0),
+              scale = Math.min(1, (areaW - 10) / total);
+            const holder = k.node();
+            k.scale(holder, scale);
+            k.add(s.scroll.content, holder);
+            let x = 0;
+            const tops = {};
+            for (const column of columns) tops[column] = 0;
+            let maxHeight = 0;
+            const boxes = [];
+            for (const column of columns) {
+              for (const label of LABELS.filter((l) => l.column === column)) {
+                const span = label.span ? COLUMN_WIDTHS.slice(column, column + label.span).reduce((a, b) => a + b, 0) : COLUMN_WIDTHS[column];
+                const lines = label.list ? label.list(data, session) : String(label.text(data, session)).split("\n").map((text) => ({ text }));
+                const lineHeight = (label.font === "bigFont.fnt" ? 32 : label.font === "goldFont.fnt" ? 34 : label.font === "chatFont.fnt" ? 22 : 64) * label.scale;
+                const boxH = lines.length * lineHeight + 8;
+                boxes.push({ label, lines, x, y: tops[column], w: span - 4, h: boxH, lineHeight });
+                const bottom = tops[column] + boxH + 4;
+                for (let c = column; c < column + (label.span || 1); c++) tops[c] = Math.max(tops[c] || 0, bottom);
+                maxHeight = Math.max(maxHeight, bottom);
+              }
+              x += COLUMN_WIDTHS[column];
+            }
+            const contentHeight = Math.max(areaH, (maxHeight + 10) * scale);
+            for (const box of boxes) {
+              const top = contentHeight / scale - 5 - box.y;
+              const bg = k.layerColor([...box.label.color, 255], box.w, box.h);
+              k.pos(bg, box.x + 2, top - box.h);
+              k.add(holder, bg);
+              box.lines.forEach((line, i) => {
+                const text = k.label(line.text, box.label.font, box.label.scale);
+                if (box.label.align === "center") {
+                  k.anchor(text, 0.5, 0.5);
+                  k.pos(text, box.x + 2 + box.w / 2, top - 4 - (i + 0.5) * box.lineHeight);
+                } else {
+                  k.anchor(text, 0, 0.5);
+                  k.pos(text, box.x + 6, top - 4 - (i + 0.5) * box.lineHeight);
+                }
+                k.limitWidth(text, box.w - 8, box.label.scale, 0.05);
+                if (line.newBest) k.color(text, NEW_BEST);
+                else if (line.alt) k.color(text, [225, 225, 225]);
+                k.add(holder, text, 1);
+              });
+            }
+            k.setListHeight(s.scroll, contentHeight);
+          }
+          render(ui);
+          ui.showPopup(popup);
+        }
+        // The skull button (GJ_plainBtn with miniSkull on top).
+        function skullButton(ui, level) {
+          const base = ui.frame("GJ_plainBtn_001.png"),
+            skull = ui.frame("miniSkull_001.png"),
+            [bw, bh] = ui.getSize(base);
+          ui.pos(skull, bw / 2, bh / 2);
+          ui.add(base, skull);
+          ui.scale(base, 0.75);
+          const button = ui.button(base, (k) => openLayer(k, level()));
+          ui.setID(button, "dt-skull-button");
+          return button;
+        }
+        mod.modify("PauseLayer", {
+          customSetup(self) {
+            self.orig();
+            if (!setting("pause-menu")) return;
+            const ui = self.ui,
+              menu = ui.getChildByID(self.ptr, "left-button-menu");
+            if (!menu) return;
+            ui.add(menu, skullButton(ui, () => game.level));
+            ui.updateLayout(menu);
+          },
+        });
+        mod.modify("EndLevelLayer", {
+          customSetup(self) {
+            self.orig();
+            if (!setting("complete-menu")) return;
+            const ui = self.ui,
+              level = game.level;
+            // Next to the end screen's hide button.
+            const menu = ui.getChildByIDRecursive(self.ptr, "hide-layer-menu");
+            const button = skullButton(ui, () => level);
+            if (menu) {
+              ui.add(menu, button);
+              ui.updateLayout(menu);
+            } else {
+              const own = ui.menu(),
+                [w, h] = ui.winSize();
+              ui.pos(button, w - 30, h - 30);
+              ui.add(own, button);
+              ui.add(self.ptr, own, 100);
+            }
+          },
+        });
+        mod.modify("LevelInfoLayer", {
+          init(self, level) {
+            if (!self.origBool()) return false;
+            const ui = self.ui,
+              menu = ui.menu();
+            ui.setID(menu, "elohmrow.death_tracker/menu");
+            // Bottom left of the level page.
+            const button = skullButton(ui, () => level);
+            ui.pos(button, 26, 70);
+            ui.add(menu, button);
+            ui.add(self.ptr, menu, 5);
+            return true;
+          },
+        });
+      });
     })();
     // Geode Web: register every Geode mod's hooks (before the game loads).
     (function () {
