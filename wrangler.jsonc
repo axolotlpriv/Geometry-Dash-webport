@@ -1,0 +1,11 @@
+// Cloudflare Workers Builds: serves the web port (index.html) as a static
+// site from the repository root. Files that aren't part of the site are
+// listed in .assetsignore.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "geometry-dash-webport",
+  "compatibility_date": "2026-10-23",
+  "assets": {
+    "directory": "."
+  }
+}
