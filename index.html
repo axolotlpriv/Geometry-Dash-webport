@@ -14604,7 +14604,9 @@ self.onmessage = async ({ data: e }) => {
         return parts;
       }
       function normalizeSetting(key, def) {
-        const type = def.type === "rgb" ? "color" : def.type === "rgba" ? "rgba" : def.type;
+        // "custom:<name>" settings are drawn by their mod.
+        const custom = String(def.type || "").startsWith("custom:") ? def.type.slice(7) : null;
+        const type = custom ? "custom" : def.type === "rgb" ? "color" : def.type === "rgba" ? "rgba" : def.type;
         const control = def.control || {};
         const setting = {
           key,
@@ -14622,7 +14624,7 @@ self.onmessage = async ({ data: e }) => {
           oneOf: def["one-of"] || null,
           display: def.display || null,
           buttons: def.buttons || null,
-          custom: def.custom || null,
+          custom: def.custom || custom,
         };
         if (type === "int" || type === "float") {
           const range = setting.max !== undefined && setting.min !== undefined;
@@ -15433,6 +15435,11 @@ self.onmessage = async ({ data: e }) => {
           getChildByID: (parent, id) => Geode.ids.child(ui, parent, id),
           getChildByIDRecursive: (parent, id) => Geode.ids.find(ui, parent, id),
           className: (node) => Geode.rtti(node),
+          // CCLabelBMFont::getString
+          getString(node) {
+            const getString = Geode.cocosFunction("?getString@CCLabelBMFont@cocos2d@@UEAAPEBDXZ");
+            return node && getString ? mem.cString(ui.ptr(getString, [node])) : "";
+          },
           getAnchor(node) {
             const p = node + NODE.anchor;
             return [mem.f32(p), mem.f32(p + 4)];
@@ -15946,6 +15953,12 @@ self.onmessage = async ({ data: e }) => {
             hide() {
               notification.hideAt = performance.now();
             },
+            // Gone at once, shown or still queued.
+            cancel() {
+              const at = queue.indexOf(notification);
+              if (at >= 0) queue.splice(at, 1);
+              notification.cancelled = true;
+            },
             setString(next) {
               notification.text = String(next);
               notification.dirty = true;
@@ -16052,13 +16065,51 @@ self.onmessage = async ({ data: e }) => {
           n.hiding = now;
           hideNotification(ui, n);
         }
-        if (n.hiding && now - n.hiding > FADE_OUT * 1000 + 50) {
+        if (n.cancelled || (n.hiding && now - n.hiding > FADE_OUT * 1000 + 50)) {
           ui.remove(n.node);
           ui.release(n.node);
           showing = null;
         }
       });
       Geode.notify = (text, icon, time) => Geode.Notification.create(text, icon, time).show();
+
+      // A mod's config file, edited in the page: there's no folder to open
+      // on the web, so "open config folder" settings open this instead.
+      Geode.editTextFile = (title, text, onSave) => {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;inset:0;z-index:1000002;display:flex;align-items:center;justify-content:center;padding:16px;background:#0009;box-sizing:border-box";
+        const panel = document.createElement("div");
+        panel.style.cssText = "display:flex;flex-direction:column;gap:10px;width:100%;max-width:560px;height:min(480px,100%);padding:14px 16px;border:1px solid #ffffff40;border-radius:8px;background:#111e;color:#fff;font:14px/1.4 sans-serif;box-sizing:border-box";
+        const heading = document.createElement("div");
+        heading.textContent = title;
+        heading.style.cssText = "font-weight:bold;font-size:15px";
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.spellcheck = false;
+        area.style.cssText = "flex:1;min-height:0;resize:none;padding:8px;border:1px solid #ffffff30;border-radius:4px;background:#0008;color:#fff;font:13px/1.4 monospace";
+        for (const type of ["keydown", "keyup", "keypress"]) area.addEventListener(type, (event) => event.stopPropagation());
+        const buttons = document.createElement("div");
+        buttons.style.cssText = "display:flex;justify-content:flex-end;gap:8px";
+        const button = (label, onClick) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.textContent = label;
+          b.style.cssText = "padding:6px 14px;border:1px solid #ffffff40;border-radius:4px;background:#ffffff1a;color:#fff;font:inherit;cursor:pointer";
+          b.addEventListener("click", onClick);
+          buttons.append(b);
+        };
+        const close = () => overlay.remove();
+        button("Cancel", close);
+        button("Save", () => {
+          onSave(area.value);
+          close();
+        });
+        panel.append(heading, area, buttons);
+        overlay.append(panel);
+        overlay.addEventListener("pointerdown", (event) => event.stopPropagation());
+        document.body.append(overlay);
+        area.focus();
+      };
     })();
     // Geode Web: Geode's mods list (ModsLayer.cpp, ModList.cpp, ModItem.cpp,
     // SwelvyBG.cpp) in the game's cocos UI, and the Geode button on the main
@@ -16953,7 +17004,24 @@ self.onmessage = async ({ data: e }) => {
         const social = menus[2];
         if (social) Geode.ids.setFrom(ui, social, 0, "robtop-logo-button", "facebook-button", "twitter-button", "youtube-button", "twitch-button", "discord-button");
         const more = menus[3];
-        if (more) Geode.ids.setFrom(ui, more, 0, "more-games-button", "close-button");
+        if (more) {
+          Geode.ids.setFrom(ui, more, 0, "more-games-button", "close-button");
+          // The close button gets a menu of its own (detachAndCreateMenu).
+          const close = ui.getChildByID(more, "close-button");
+          if (close) {
+            const closeMenu = ui.menu(),
+              [mx, my] = ui.getPos(more),
+              [bx, by] = ui.getPos(close);
+            ui.setID(closeMenu, "close-menu");
+            ui.size(closeMenu, 200, 50);
+            ui.ignoreAnchor(closeMenu, false);
+            ui.anchor(closeMenu, 0.5, 0.5);
+            ui.pos(closeMenu, mx + bx + 200 / 2 - ui.scaledSize(close)[0] / 2, my + by);
+            ui.add(layer, closeMenu);
+            Geode.switchToMenu(ui, close, closeMenu);
+            ui.setLayout(closeMenu, Geode.Layout.simpleRow({ align: "start", gap: 5 }));
+          }
+        }
         const labels = children.filter((child) => ui.className(child) === "CCLabelBMFont");
         if (labels.length) ui.setID(labels[labels.length - 1], "player-username");
         Geode.events.send("node-ids:MenuLayer", ui, layer);
@@ -18367,6 +18435,10 @@ self.onmessage = async ({ data: e }) => {
         "EditLevelLayer::init": 0x4d5440,
         "EditorPauseLayer::init": 0x4d9ec0,
         "LevelInfoLayer::scene": 0x6f70c0,
+        "LevelInfoLayer::setupProgressBars": 0x6fa700,
+        "LevelPage::init": 0x719c20,
+        "LevelPage::updateDynamicPage": 0x71a8b0,
+        "LevelCell::loadFromLevel": 0x4ae050,
         "EditLevelLayer::scene": 0x4d52b0,
         "LevelSearchLayer::init": 0x70c190,
         "LevelSearchLayer::onSearch": 0x711730,
@@ -18671,6 +18743,45 @@ self.onmessage = async ({ data: e }) => {
           } catch (idError) {
             Geode.log.error("LevelInfoLayer IDs failed:", idError);
           }
+        },
+        { priority: FIRST },
+      );
+      // LevelInfoLayer::setupProgressBars: the bars and labels it just added.
+      nodeIds.hook(
+        "LevelInfoLayer::setupProgressBars",
+        (call) => {
+          call.callOriginal();
+          const ui = Geode.cocos(call),
+            children = ui.children(call.arg(0)),
+            n = children.length,
+            ids = { 1: "practice-mode-label", 2: "practice-mode-percentage", 3: "practice-mode-bar", 5: "normal-mode-label", 6: "normal-mode-percentage", 7: "normal-mode-bar" };
+          for (const [back, id] of Object.entries(ids)) if (children[n - back]) ui.setID(children[n - back], id);
+        },
+        { priority: FIRST },
+      );
+      // LevelPage (the main levels' pages).
+      nodeIds.hook(
+        "LevelPage::init",
+        (call) => {
+          if (!(call.callOriginal() & 255)) return;
+          const ui = Geode.cocos(call);
+          Geode.ids.setFrom(ui, call.arg(0), 0, "level-menu", "normal-progress-bar", "practice-progress-bar", "normal-progress-label", "practice-progress-label", "normal-mode-label", "practice-mode-label");
+        },
+        { priority: FIRST },
+      );
+      // LevelCell: the best percentage of a level not completed yet.
+      nodeIds.hook(
+        "LevelCell::loadFromLevel",
+        (call) => {
+          call.callOriginal();
+          const ui = Geode.cocos(call);
+          const walk = (node, depth) => {
+            for (const child of ui.children(node)) {
+              if (ui.className(child) === "CCLabelBMFont" && /^\d+%$/.test(ui.getString(child))) return ui.setID(child, "percentage-label");
+              if (depth < 3) walk(child, depth + 1);
+            }
+          };
+          walk(call.arg(0), 0);
         },
         { priority: FIRST },
       );
@@ -20426,6 +20537,745 @@ self.onmessage = async ({ data: e }) => {
             if (!checkQuests(ui)) removeAlert(ui, pauseButton(ui, "quests"));
           },
         });
+      });
+    })();
+    // Restart Buttons (weebify.restartbtn), ported from
+    // github.com/Weebifying/restartbutton-geode: restart and reload-textures
+    // buttons next to the main menu's close button, with keybinds.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const loader = Geode.loader;
+      Object.assign(loader.addresses, { "GameManager::reloadAll": 0x58a410, "MenuLayer::onQuit": 0x735f90 });
+
+      Geode.port("weebify.restartbtn", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        let isReload = false;
+        const popupOpen = (ui) => {
+          const scene = ui.runningScene();
+          return !!(ui.getChildByID(scene, "restart-popup") || ui.getChildByID(scene, "reload-popup"));
+        };
+        function restart(ui) {
+          if (popupOpen(ui)) return;
+          const popup = ui.quickPopup("Restart Game", "Are you sure you want to <cg>restart</c>?", "Cancel", "Yes", (k, btn2) => {
+            // game::restart: here, reloading the page (after saving).
+            if (btn2) (window.__gdReload || (() => location.reload()))();
+          });
+          if (popup && popup.layer) ui.setID(popup.layer, "restart-popup");
+        }
+        function reload(ui) {
+          if (popupOpen(ui)) return;
+          isReload = true;
+          const popup = ui.quickPopup("Reload Textures", "Are you sure you want to <cj>reload textures</c>?", "Cancel", "Yes", (k, btn2) => {
+            if (btn2) k.inv("GameManager::reloadAll", [k.gameManager(), 0, 0, 1, 0, 0]);
+          });
+          if (popup && popup.layer) ui.setID(popup.layer, "reload-popup");
+        }
+
+        mod.modify("MenuLayer", {
+          init(self) {
+            if (!self.origBool()) return false;
+            const ui = self.ui,
+              layer = self.ptr,
+              [w, h] = ui.winSize();
+            let menu = ui.getChildByID(layer, "close-menu");
+            if (!menu) {
+              menu = ui.menu();
+              ui.setID(menu, "close-menu");
+              ui.size(menu, 200, 33.25);
+              ui.ignoreAnchor(menu, false);
+              ui.add(layer, menu);
+            }
+            ui.anchor(menu, 0, 1);
+            ui.pos(menu, w / 300, h - w / 300);
+            const [mw, mh] = ui.getSize(menu);
+            ui.size(menu, mh, mw);
+            Geode.Layout.set(menu, Geode.Layout.column({ reverse: true, align: "end", gap: 4, autoScale: false }));
+            // Exit button
+            const close = ui.getChildByID(menu, "close-button");
+            if (setting("exit")) {
+              if (!close) {
+                const sprite = ui.frame("GJ_closeBtn_001.png");
+                ui.scale(sprite, 0.7);
+                const button = ui.button(sprite, (k) => k.inv("MenuLayer::onQuit", [layer, 0]));
+                ui.setID(button, "close-button");
+                ui.add(menu, button);
+              }
+            } else if (close) ui.remove(close);
+            // Restart button
+            if (setting("restart")) {
+              const sprite = ui.frame("GJ_updateBtn_001.png");
+              ui.scale(sprite, 0.7);
+              const button = ui.button(sprite, (k) => restart(k));
+              ui.setID(button, "restart-button");
+              ui.add(menu, button);
+            }
+            // Reload textures button
+            if (setting("reload-textures")) {
+              const sprite = ui.frame("GJ_replayBtn_001.png");
+              ui.scale(sprite, 0.525);
+              const button = ui.button(sprite, (k) => reload(k));
+              ui.setID(button, "reload-button");
+              ui.add(menu, button);
+            }
+            ui.scale(menu, setting("size"));
+            ui.updateLayout(menu);
+            return true;
+          },
+        });
+        // Reloading textures comes back to the menu without the video
+        // options open.
+        mod.hook("MenuLayer::scene", (call) => {
+          if (isReload) {
+            isReload = false;
+            call.setArg(0, 0);
+          }
+          call.callOriginal();
+        });
+
+        // Keybinds: on the main menu, or anywhere but the editor.
+        const allowed = (ui) => {
+          const scene = ui.runningScene();
+          if (setting("keybind_anywhere")) return !ui.getChildByID(scene, "LevelEditorLayer") && !(scene && ui.children(scene).some((c) => ui.className(c) === "LevelEditorLayer"));
+          return !!ui.getChildByID(scene, "MenuLayer");
+        };
+        for (const [key, fn] of [["restart-keybind", restart], ["reload-keybind", reload]]) {
+          mod.onKeybind(key, (down, repeat) => {
+            if (!down || repeat) return;
+            loader.runOnGameThread((call) => {
+              const ui = Geode.cocos(call);
+              if (allowed(ui)) fn(ui);
+            });
+          });
+        }
+      });
+    })();
+    // Death Message (beat.death_message), ported from
+    // github.com/BeatACVR/geode-deathmessages: a random message from
+    // deathMessages.txt in a notification when you die.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game;
+      const ANTICHEAT_SPIKE = 0x3790; // GJBaseGameLayer::m_anticheatSpike
+      // resources/deathMessagesTemplate.txt
+      const TEMPLATE =
+        "# Write each message on a separate line.\n# If a message is too long, it may go off screen.\n# Each message is chosen at random and won't be the same as the previous message.\n\nYou died. Again.\nUnfortunately, you died.\nStop messing up.\nSkill issue.\nI blame lag.\nYou can do better than that.\nFocus.\nYou learn more with each try. Keep going!\nNo pain, no gain.\nHow did you even die there?\n\n# If a message ends with \\#, it will only have a chance to appear at a certain percentage.\n# Any number that is higher than 100, lower than 0, or contains anything except a whole number can be shown at any time.\n# The following message will only appear when dying at 99%.\n\n99%... that's rough. \\99";
+
+      Geode.port(
+        "beat.death_message",
+        {},
+        (mod) => {
+          // The config folder's deathMessages.txt is a saved value here,
+          // edited in the page. $on_mod(Loaded) copies the template in.
+          if (mod.getSavedValue("deathMessages.txt", null) === null) mod.setSavedValue("deathMessages.txt", TEMPLATE);
+          mod.settingExtras = (setting) =>
+            setting.custom === "folder-button"
+              ? { action: () => Geode.editTextFile("deathMessages.txt", mod.getSavedValue("deathMessages.txt", ""), (text) => mod.setSavedValue("deathMessages.txt", text)) }
+              : {};
+
+          // A trailing "\N" ties a message to dying at N%.
+          function extractPercentSuffix(line) {
+            const bsPos = line.lastIndexOf("\\");
+            if (bsPos < 0) return { line, percent: null };
+            const suffix = line.slice(bsPos + 1);
+            if (!/^\d+$/.test(suffix)) return { line, percent: null };
+            const value = parseInt(suffix, 10);
+            if (value < 0 || value > 100) return { line, percent: null };
+            return { line: line.slice(0, bsPos).replace(/ +$/, ""), percent: value };
+          }
+          function loadMessages() {
+            const phrases = [];
+            for (let line of String(mod.getSavedValue("deathMessages.txt", "")).split(/\r?\n/)) {
+              line = line.replace(/^[ \t]+/, "");
+              if (!line) continue;
+              if (line.startsWith("# ")) continue;
+              const { line: text, percent } = extractPercentSuffix(line);
+              phrases.push({ text, percentConstraint: percent });
+            }
+            return phrases;
+          }
+          let lastPhraseIndex = -1;
+
+          mod.modify("PlayLayer", {
+            fields: () => ({ phrases: [], notification: null }),
+            init(self) {
+              // PlayLayer::scene -> loadMessages()
+              self.fields.phrases = loadMessages();
+              return self.orig();
+            },
+            destroyPlayer(self, player, object) {
+              const fields = self.fields;
+              if (fields.notification) fields.notification.cancel();
+              const disableInPractice = mod.getSettingValue("non-practice-button"),
+                shouldShowMessage = !(disableInPractice && game.isPractice()),
+                obj = self.arg(2);
+              if (shouldShowMessage && fields.phrases.length && obj !== mem.ptr(self.ptr + ANTICHEAT_SPIKE)) {
+                const currentPercent = Math.floor(self.ui.inv("PlayLayer::getCurrentPercent", [self.ptr]).f32),
+                  isPlatformer = game.isPlatformer();
+                const eligible = [];
+                fields.phrases.forEach((p, i) => {
+                  if (p.percentConstraint !== null) {
+                    if (isPlatformer || p.percentConstraint !== currentPercent) return;
+                  }
+                  eligible.push(i);
+                });
+                if (eligible.length) {
+                  let chosenIdx;
+                  if (eligible.length === 1) chosenIdx = eligible[0];
+                  else {
+                    do chosenIdx = eligible[Math.floor(Math.random() * eligible.length)];
+                    while (chosenIdx === lastPhraseIndex);
+                  }
+                  lastPhraseIndex = chosenIdx;
+                  fields.notification = Geode.Notification.create(fields.phrases[chosenIdx].text, "error").show();
+                }
+              }
+              return self.orig();
+            },
+          });
+        },
+      );
+    })();
+    // Randomize Icon on Death (kittenchilly.randomize_icon_on_death), ported
+    // from github.com/kittenchilly/Randomize-Icon-on-Death, with the parts of
+    // hiimjustin000's Icon Randomizer API it uses: a new random (unlocked)
+    // icon set every time the level restarts.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        loader = Geode.loader;
+      Object.assign(loader.addresses, {
+        "GameManager::countForType": 0x581c00,
+        "GameManager::isIconUnlocked": 0x57c500,
+        "GameManager::isColorUnlocked": 0x57c8e0,
+        "GameManager::colorForIdx": 0x581350,
+        "GameManager::setGameVariable": 0x582eb0,
+        "GameStatsManager::toggleEnableItem": 0x5e5bd0,
+        "PlayerObject::setColor": 0x79d310,
+        "PlayerObject::setSecondColor": 0x79d3a0,
+        "PlayerObject::toggleGhostEffect": 0x79ee30,
+        "PlayerObject::updatePlayerGlow": 0x7a02a0,
+        "PlayerObject::updateGlowColor": 0x79d430,
+        "PlayerObject::setupStreak": 0x7887c0,
+        "PlayerObject::updatePlayerFrame": 0x79dc50,
+        "PlayerObject::updatePlayerShipFrame": 0x79de80,
+        "PlayerObject::updatePlayerRollFrame": 0x79e580,
+        "PlayerObject::updatePlayerBirdFrame": 0x79e2e0,
+        "PlayerObject::updatePlayerDartFrame": 0x79e9e0,
+        "PlayerObject::updatePlayerSwingFrame": 0x79e7b0,
+        "PlayerObject::updatePlayerJetpackFrame": 0x79e0b0,
+        "PlayerObject::createRobot": 0x787ef0,
+        "PlayerObject::createSpider": 0x7882b0,
+        "GJEffectManager::getAllColorActions": 0x65b2d0,
+        "GJEffectManager::getColorAction": 0x65bc00,
+      });
+      // GameManager's icon values (SeedValueRSV: random, seed, value).
+      const GM = {
+        cube: 0x2c4, ship: 0x2d0, ball: 0x2dc, ufo: 0x2e8, wave: 0x2f4, robot: 0x300, spider: 0x30c, swing: 0x318,
+        color1: 0x324, color2: 0x330, glowColor: 0x33c, trail: 0x348, shipFire: 0x354, deathEffect: 0x360, jetpack: 0x36c,
+        glow: 0x388, loadedDeathEffect: 0x3d0,
+      };
+      // PlayerObject members.
+      const PO = {
+        hasGlow: 0x72a, ghostType: 0x72c, regularTrail: 0x7a0, waveTrail: 0x7b0, hasCustomGlowColor: 0x980, glowColor: 0x981,
+        isShip: 0x9b9, isBird: 0x9ba, isBall: 0x9bb, isDart: 0x9bc, isSwing: 0x9c4, playerColor1: 0xa8a, playerColor2: 0xa8d, isPlatformer: 0xb70,
+      };
+      const RGBA_BASE = 0x140; // CCNodeRGBA's CCRGBAProtocol in a PlayerObject
+      const CA = { fromColor: 0x48, duration: 0x50, blending: 0x54, playerColor: 0x58 }; // ColorAction
+      const ICON = { Cube: 0, Ship: 1, Ball: 2, Ufo: 3, Wave: 4, Robot: 5, Spider: 6, Swing: 7, Jetpack: 8, DeathEffect: 98, Special: 99, Item: 100, ShipFire: 101 };
+      const UNLOCK = { Cube: 1, Col1: 2, Col2: 3, Ship: 4, Ball: 5, Bird: 6, Dart: 7, Robot: 8, Spider: 9, Streak: 10, Death: 11, GJItem: 12, Swing: 13, Jetpack: 14, ShipFire: 15 };
+      const PLAYER_EXPLODE = "0153";
+      const rsvGet = (gm, key) => mem.i32(gm + GM[key] + 8);
+      function rsvSet(gm, key, value) {
+        const seed = Math.floor(Math.random() * 1000) + 1;
+        mem.setI32(gm + GM[key], value + seed);
+        mem.setI32(gm + GM[key] + 4, seed);
+        mem.setI32(gm + GM[key] + 8, value);
+      }
+      const randomItem = (list) => list[Math.floor(Math.random() * list.length)];
+
+      // ---------------------------------------------- IconRandomizer API
+      const unlocked = {};
+      function init(ui) {
+        const gm = ui.gameManager();
+        const icons = [
+          [ICON.Cube, UNLOCK.Cube], [ICON.Ship, UNLOCK.Ship], [ICON.Ball, UNLOCK.Ball], [ICON.Ufo, UNLOCK.Bird], [ICON.Wave, UNLOCK.Dart],
+          [ICON.Robot, UNLOCK.Robot], [ICON.Spider, UNLOCK.Spider], [ICON.Swing, UNLOCK.Swing], [ICON.Jetpack, UNLOCK.Jetpack],
+          [ICON.DeathEffect, UNLOCK.Death], [ICON.Special, UNLOCK.Streak], [ICON.Item, UNLOCK.GJItem], [ICON.ShipFire, UNLOCK.ShipFire],
+        ];
+        for (const [iconType, unlockType] of icons) {
+          const vec = (unlocked[unlockType] = []);
+          const amount = iconType === ICON.Item ? 20 : ui.inv("GameManager::countForType", [gm, iconType]).int;
+          for (let i = iconType === ICON.Item ? 18 : 1; i <= amount; i++) if (ui.inv("GameManager::isIconUnlocked", [gm, i, iconType]).value & 255) vec.push(i);
+        }
+        for (const unlockType of [UNLOCK.Col1, UNLOCK.Col2]) {
+          const vec = (unlocked[unlockType] = []);
+          for (let i = 0; i < 107; i++) if (ui.inv("GameManager::isColorUnlocked", [gm, i, unlockType]).value & 255) vec.push(i);
+        }
+      }
+      // RandomizeType -> (unlock list, where it goes)
+      const TYPES = {
+        cube: [UNLOCK.Cube, "cube"], ship: [UNLOCK.Ship, "ship"], ball: [UNLOCK.Ball, "ball"], ufo: [UNLOCK.Bird, "ufo"], wave: [UNLOCK.Dart, "wave"],
+        robot: [UNLOCK.Robot, "robot"], spider: [UNLOCK.Spider, "spider"], swing: [UNLOCK.Swing, "swing"], jetpack: [UNLOCK.Jetpack, "jetpack"],
+        deathEffect: [UNLOCK.Death, "deathEffect"], trail: [UNLOCK.Streak, "trail"], shipFire: [UNLOCK.ShipFire, "shipFire"],
+        color1: [UNLOCK.Col1, "color1"], color2: [UNLOCK.Col2, "color2"], glowColor: [UNLOCK.Col2, "glowColor"],
+      };
+      function randomize(ui, type) {
+        const gm = ui.gameManager();
+        if (type === "animation") {
+          const gsm = ui.ptr("GameStatsManager::sharedState");
+          for (const id of unlocked[UNLOCK.GJItem] || []) ui.inv("GameStatsManager::toggleEnableItem", [gsm, UNLOCK.GJItem, id, Math.random() < 0.5 ? 1 : 0]);
+          return;
+        }
+        if (type === "glow") {
+          const glow = (unlocked[UNLOCK.Streak] || []).includes(2) ? Math.random() < 0.5 : false;
+          mem.setU8(gm + GM.glow, glow ? 1 : 0);
+          return;
+        }
+        if (type === "explode") {
+          ui.inv("GameManager::setGameVariable", [gm, { str: PLAYER_EXPLODE }, Math.random() < 0.5 ? 1 : 0]);
+          return;
+        }
+        const [unlockType, key] = TYPES[type];
+        const vec = unlocked[unlockType] || [];
+        if (vec.length) rsvSet(gm, key, randomItem(vec));
+      }
+
+      // ------------------------------------------------------------ mod
+      Geode.port("kittenchilly.randomize_icon_on_death", {}, (mod) => {
+        const ORDER = ["cube", "ship", "ball", "ufo", "wave", "robot", "spider", "swing", "jetpack", "deathEffect", "trail", "shipFire", "animation", "explode", "color1", "color2", "glowColor", "glow"];
+        const colorBytes = (ui, index) => {
+          const p = Number(ui.inv("GameManager::colorForIdx", [ui.gameManager(), { bytes: new Uint8Array(4) }, index]).value);
+          return [mem.u8(p), mem.u8(p + 1), mem.u8(p + 2)];
+        };
+        const color = (rgb) => ({ bytes: new Uint8Array([rgb[0], rgb[1], rgb[2], 0]) });
+        const readColor = (p) => [mem.u8(p), mem.u8(p + 1), mem.u8(p + 2)];
+        const writeColor = (p, rgb) => rgb.forEach((v, i) => mem.setU8(p + i, v));
+
+        // normalStreak + shipFire: the player's trails, made again from the
+        // new settings (setupStreak builds them like the mod sets them up).
+        function resetStreaks(ui, player) {
+          for (const offset of [PO.regularTrail, PO.waveTrail]) {
+            const streak = mem.ptr(player + offset);
+            if (streak && ui.parent(streak)) ui.remove(streak);
+          }
+          ui.inv("PlayerObject::setupStreak", [player]);
+        }
+        function updateFrames(ui, player) {
+          const gm = ui.gameManager(),
+            v = (key) => rsvGet(gm, key),
+            flag = (key) => !!mem.u8(player + PO[key]);
+          const frame = (fn, value) => ui.inv("PlayerObject::" + fn, [player, value]);
+          if (flag("isShip")) {
+            if (flag("isPlatformer")) frame("updatePlayerJetpackFrame", v("jetpack"));
+            else frame("updatePlayerShipFrame", v("ship"));
+            frame("updatePlayerFrame", v("cube"));
+          } else if (flag("isBall")) frame("updatePlayerRollFrame", v("ball"));
+          else if (flag("isBird")) {
+            frame("updatePlayerBirdFrame", v("ufo"));
+            frame("updatePlayerFrame", v("cube"));
+          } else if (flag("isDart")) frame("updatePlayerDartFrame", v("wave"));
+          else if (flag("isSwing")) frame("updatePlayerSwingFrame", v("swing"));
+          else frame("updatePlayerFrame", v("cube"));
+          frame("createRobot", Math.min(68, Math.max(1, v("robot"))));
+          frame("createSpider", Math.min(69, Math.max(1, v("spider"))));
+          loadDeathEffect(ui, v("deathEffect"));
+        }
+        // GameManager::loadDeathEffect (inline in the game).
+        function loadDeathEffect(ui, id) {
+          const gm = ui.gameManager();
+          if (id < 1) id = 1;
+          if (id > 19) id = 20;
+          const loaded = mem.i32(gm + GM.loadedDeathEffect);
+          if (id === loaded) return;
+          const cache = Geode.cocosFunction("?sharedTextureCache@CCTextureCache@cocos2d@@SAPEAV12@XZ"),
+            remove = Geode.cocosFunction("?removeTextureForKey@CCTextureCache@cocos2d@@QEAAXPEBD@Z"),
+            addImage = Geode.cocosFunction("?addImage@CCTextureCache@cocos2d@@QEAAPEAVCCTexture2D@2@PEBD_N@Z"),
+            frames = Geode.cocosFunction("?sharedSpriteFrameCache@CCSpriteFrameCache@cocos2d@@SAPEAV12@XZ"),
+            addFrames = Geode.cocosFunction("?addSpriteFramesWithFile@CCSpriteFrameCache@cocos2d@@QEAAXPEBD@Z");
+          if (!cache || !remove || !addImage || !frames || !addFrames) return;
+          const name = (n, ext) => "PlayerExplosion_" + String(n).padStart(2, "0") + "." + ext;
+          if (loaded > 1) ui.inv(remove, [ui.ptr(cache), { str: name(loaded - 1, "png") }]);
+          if (id > 1) {
+            ui.inv(addImage, [ui.ptr(cache), { str: name(id - 1, "png") }, 0]);
+            ui.inv(addFrames, [ui.ptr(frames), { str: name(id - 1, "plist") }]);
+          }
+          mem.setI32(gm + GM.loadedDeathEffect, id);
+        }
+
+        mod.modify("PlayLayer", {
+          resetLevel(self) {
+            const ui = self.ui,
+              layer = self.ptr,
+              gm = ui.gameManager();
+            init(ui);
+            for (const type of ORDER) if (mod.getSettingValue(type)) randomize(ui, type);
+            const p1 = game.player(1),
+              p2 = game.player(2);
+            const color1 = colorBytes(ui, rsvGet(gm, "color1")),
+              color2 = colorBytes(ui, rsvGet(gm, "color2")),
+              glowColor = colorBytes(ui, rsvGet(gm, "glowColor")),
+              glow = mem.u8(gm + GM.glow);
+            for (const [player, main, second] of [[p1, color1, color2], [p2, color2, color1]]) {
+              if (!player) continue;
+              // setColor overrides CCRGBAProtocol's, so `this` is that base.
+              ui.inv("PlayerObject::setColor", [player + RGBA_BASE, color(main)]);
+              ui.inv("PlayerObject::setSecondColor", [player, color(second)]);
+              ui.inv("PlayerObject::toggleGhostEffect", [player, mem.i32(player + PO.ghostType)]);
+              mem.setU8(player + PO.hasGlow, glow);
+              // enableCustomGlowColor / disableCustomGlowColor
+              mem.setU8(player + PO.hasCustomGlowColor, glow ? 1 : 0);
+              if (glow) writeColor(player + PO.glowColor, glowColor);
+              ui.inv("PlayerObject::updatePlayerGlow", [player]);
+              ui.inv("PlayerObject::updateGlowColor", [player]);
+              resetStreaks(ui, player);
+              ui.inv("PlayerObject::setSecondColor", [player, color(second)]);
+            }
+            // Color triggers that use the player colors start from the new
+            // ones (1005/1006 are the player color channels).
+            const effects = p1 && Geode.member(layer, "GJEffectManager", "GJBaseGameLayer.effectManager", 0x140, 0xda0);
+            if (effects) {
+              const from1 = readColor(p1 + PO.playerColor1),
+                from2 = readColor(p1 + PO.playerColor2);
+              const actions = ui.ptr("GJEffectManager::getAllColorActions", [effects]);
+              const channel1005 = ui.ptr("GJEffectManager::getColorAction", [effects, 1005]),
+                channel1006 = ui.ptr("GJEffectManager::getColorAction", [effects, 1006]);
+              if (actions && Geode.rtti(actions) === "CCArray") {
+                const count = ui.inv("cocos2d::CCArray::count", [actions]).int;
+                for (let i = 0; i < count; i++) {
+                  const action = ui.ptr("cocos2d::CCArray::objectAtIndex", [actions, i]);
+                  if (!action) continue;
+                  const playerColor = mem.i32(action + CA.playerColor);
+                  if (playerColor === 1) writeColor(action + CA.fromColor, from1);
+                  else if (playerColor === 2) writeColor(action + CA.fromColor, from2);
+                  if (action === channel1005 || action === channel1006) {
+                    mem.setF32(action + CA.duration, 0);
+                    writeColor(action + CA.fromColor, action === channel1005 ? from1 : from2);
+                    mem.setU8(action + CA.blending, 1);
+                  }
+                }
+              }
+            }
+            // The end portal's bar and the progress bar take color 1 too.
+            const endPortal = mem.ptr(layer + 0x3228);
+            if (endPortal && p1) {
+              const bar = Geode.member(endPortal, "CCSprite", "EndPortalObject.gradientBar", 0x500, 0x5a0);
+              if (bar) ui.color(bar, readColor(p1 + PO.playerColor1));
+            }
+            const fill = mem.ptr(layer + game.OFF.progressFill);
+            if (fill && p1) ui.color(fill, readColor(p1 + PO.playerColor1));
+            self.orig();
+            // Frames after resetLevel: it switches back to the starting mode.
+            if (p1) updateFrames(ui, p1);
+            if (p2) updateFrames(ui, p2);
+          },
+        });
+      });
+    })();
+    // Coin Sounds (dominodev.coin-sounds): plays a sound when you collect a
+    // coin. The mod's source isn't public; this follows what its Windows
+    // build does (EffectGameObject::triggerObject on secret and user coins
+    // in a level, FMODAudioEngine::playEffectAdvanced("gold01.ogg") with the
+    // chosen pitch).
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        loader = Geode.loader;
+      Object.assign(loader.addresses, {
+        "EffectGameObject::triggerObject": 0x8a5f30,
+        "FMODAudioEngine::playEffectAdvanced": 0x456f30,
+      });
+      const OBJECT_TYPE = 0x3a0, // GameObject::m_objectType
+        SECRET_COIN = 22,
+        USER_COIN = 31,
+        IS_EDITOR = 0x309c, // GJBaseGameLayer::m_isEditor
+        ENGINE = 0xac2e88; // FMODAudioEngine::sharedEngine()'s instance
+      const ID = "dominodev.coin-sounds",
+        CUSTOM_PATH = "geode/" + ID + "-custom";
+
+      Geode.port(ID, {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        // The uploaded file goes into the game's files so FMOD can play it.
+        let customPath = "";
+        async function loadUploaded() {
+          customPath = "";
+          const name = setting("uploaded-sound");
+          if (typeof name !== "string" || !name) return;
+          const file = await Geode.files.get(ID, "uploaded-sound");
+          if (!file || !file.bytes) return;
+          const ext = (file.name.match(/\.(mp3|ogg|wav)$/i) || [".ogg"])[0].toLowerCase();
+          try {
+            Module.FS.writeFile("/Resources/" + CUSTOM_PATH + ext, file.bytes);
+            customPath = CUSTOM_PATH + ext;
+          } catch (writeError) {
+            mod.log.warn("Couldn't load the custom coin sound:", writeError);
+          }
+        }
+        loader.beforeBoot(() => loadUploaded());
+        mod.listenForSettingChanges("uploaded-sound", () => loadUploaded());
+
+        function soundPath() {
+          if (!setting("custom-sounds")) return "gold01.ogg";
+          const inbuilt = setting("inbuilt-sound");
+          if (inbuilt) return inbuilt;
+          return customPath || "gold01.ogg";
+        }
+        function pitch() {
+          if (!setting("enable-random-pitch")) return 1;
+          const min = setting("min-pitch"),
+            max = setting("max-pitch");
+          return min + Math.random() * Math.max(0, max - min);
+        }
+
+        mod.hook("EffectGameObject::triggerObject", (call) => {
+          const object = call.arg(0),
+            type = mem.i32(object + OBJECT_TYPE),
+            playLayer = game.playLayer;
+          if ((type === SECRET_COIN || type === USER_COIN) && playLayer && !mem.u8(playLayer + IS_EDITOR)) {
+            const engine = mem.ptr(ENGINE);
+            if (engine) {
+              const ui = Geode.cocos(call);
+              // (path, speed, unknown, volume, pitch, fft, reverb, start, end,
+              // fadeIn, fadeOut, loop, effectID, override, noPreload,
+              // channelID, uniqueID, minInterval, sfxGroup)
+              ui.inv("FMODAudioEngine::playEffectAdvanced", [engine, ui.gdString(soundPath()), { f32: 1 }, { f32: 0 }, { f32: 1 }, { f32: pitch() }, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, { f32: 0 }, 0]);
+            }
+          }
+          call.callOriginal();
+        });
+      });
+    })();
+    // DecimalPercentages (raydeeux_thesillydoggo.decimalpercentages), ported
+    // from codeberg.org/RayDeeUx/DecimalPercentages: your best percentages
+    // with decimals, everywhere they're shown.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        LV = game.LV,
+        loader = Geode.loader;
+      loader.addresses["GJGameLevel::savePercentage"] = 0x56c8b0;
+      const DAILY_ID = 0x374, // GJGameLevel::m_dailyID's value
+        GAUNTLET_LEVEL = 0x2c9, // GJGameLevel::m_gauntletLevel
+        Z_ORDER = 0x2c; // CCObject::m_nZOrder
+      const PERCENTAGE_REGEX = /^(?:(?:\d+(?:\.\d+)?%)([^\n\d]*))+(\d+(?:\.\d+)?%)$/i,
+        TRAILING_ZEROES_REGEX = /(.*[^0])(0+)$/i,
+        ALL_ZEROES_REGEX = /^0\.0+%$/i;
+
+      Geode.port("raydeeux_thesillydoggo.decimalpercentages", {}, (mod) => {
+        const getBool = (key) => !!mod.getSettingValue(key);
+        const int = (level, name) => mem.i32(level + LV[name]);
+        const isPlatformer = (level) => int(level, "levelLength") === 5;
+        function getDecimalPlaces(qualifiedForInsaneMode = true) {
+          let decimalPlaces = mod.getSettingValue("decimalPlaces");
+          if (!qualifiedForInsaneMode && decimalPlaces > 3 && !getBool("insaneMode")) decimalPlaces = 3;
+          return decimalPlaces;
+        }
+        // EditorIDs (cvolton.level-id-api) numbers editor levels; here they
+        // go by name.
+        function saveKey(level, practice) {
+          const mode = practice ? "practice" : "normal",
+            levelID = int(level, "levelID"),
+            dailyID = mem.i32(level + DAILY_ID);
+          if (int(level, "levelType") === game.LEVEL_TYPE.Editor) return "percentage_" + mode + "_local_" + game.levelString("levelName", level);
+          if (mem.u8(level + GAUNTLET_LEVEL)) return "percentage_" + mode + "_gauntlet_" + levelID;
+          if (dailyID === 0) return "percentage_" + mode + "_" + levelID;
+          return "percentage_" + mode + "_" + levelID + "_periodic_" + dailyID;
+        }
+        function getPercentageForLevel(level, practice = false) {
+          const normal = int(level, "normalPercent"),
+            practicePercent = int(level, "practicePercent");
+          if ((normal > 99 && !practice) || (practicePercent > 99 && practice)) return 100;
+          const key = saveKey(level, practice),
+            fallback = practice ? practicePercent : normal;
+          if (mod.getSavedValue(key, null) === null) mod.setSavedValue(key, fallback);
+          return mod.getSavedValue(key, fallback);
+        }
+        function savePercent(level, percent, practice) {
+          if (isPlatformer(level)) return;
+          mod.setSavedValue(saveKey(level, practice), percent);
+        }
+        function roundPercentage(percentage, qualifiedForInsaneMode = true) {
+          if (percentage >= 100 && getBool("ignoreHundredPercent")) return "100";
+          let roundedPercent = Math.fround(percentage).toFixed(getDecimalPlaces(qualifiedForInsaneMode));
+          if (!getBool("noTrailingZeros")) return roundedPercent;
+          if (!roundedPercent.includes(".")) return roundedPercent;
+          const match = roundedPercent.match(TRAILING_ZEROES_REGEX);
+          if (!match || !match[1] || !match[2]) return roundedPercent;
+          roundedPercent = match[1];
+          if (roundedPercent.endsWith(".")) roundedPercent = roundedPercent.slice(0, -1);
+          return roundedPercent;
+        }
+        const decimalPercentAsString = (level, practice = false, qualifiedForInsaneMode = true) => roundPercentage(getPercentageForLevel(level, practice), qualifiedForInsaneMode) + "%";
+        const labelByID = (ui, parent, id) => {
+          const node = ui.getChildByIDRecursive(parent, id);
+          return node && ui.className(node) === "CCLabelBMFont" ? node : 0;
+        };
+        const asFloat = (text) => {
+          const value = parseFloat(text);
+          return Number.isFinite(value) && /^-?\d+(\.\d+)?$/.test(text) ? value : null;
+        };
+        // The normal and practice labels of a level page, pause menu or
+        // level info page, when they still show the whole-number best. Like
+        // the mod, a normal label it can't change stops the practice one.
+        function applyToLabels(ui, parent, level, normalID, practiceID, { hundred = false, positive = false } = {}) {
+          const apply = (label, practice) => {
+            if (!label) return true;
+            if (hundred && ui.getString(label).startsWith("100") && getBool("ignoreHundredPercent")) return false;
+            const dpAsString = decimalPercentAsString(level, practice, true),
+              dpAsFloat = asFloat(dpAsString.slice(0, -1));
+            if (dpAsFloat === null || (positive && dpAsFloat <= 0)) return false;
+            if (Math.trunc(dpAsFloat) !== (practice ? int(level, "practicePercent") : int(level, "normalPercent"))) return false;
+            ui.setText(label, dpAsString);
+            return true;
+          };
+          if (!apply(labelByID(ui, parent, normalID), false)) return;
+          apply(labelByID(ui, parent, practiceID), true);
+        }
+
+        mod.modify(
+          "GJGameLevel",
+          {
+            savePercentage(self, percent, isPracticeMode) {
+              self.orig();
+              const level = self.ptr,
+                practice = !!(self.int(2) & 255);
+              if (isPlatformer(level)) return;
+              if (getBool("logging")) mod.log.info("=== level ID vs daily/weekly/event ID debug info ===\ndaily/weekly ID:", mem.i32(level + DAILY_ID), "\nlevel ID:", int(level, "levelID"), "\nis gauntlet:", !!mem.u8(level + GAUNTLET_LEVEL));
+              const pl = game.playLayer;
+              if (!pl) return savePercent(level, self.int(1), practice);
+              // Only the save for the mode being played (the game also calls
+              // this for other bookkeeping).
+              if (practice !== game.isPractice()) return;
+              const current = self.ui.inv("PlayLayer::getCurrentPercent", [pl]).f32;
+              if (current > getPercentageForLevel(level, practice)) savePercent(level, current, practice);
+            },
+          },
+          { priority: -3999 },
+        );
+        mod.modify(
+          "LevelInfoLayer",
+          {
+            init(self, level) {
+              if (!self.origBool()) return false;
+              const lvl = self.arg(1);
+              if (!getBool("enabled") || isPlatformer(lvl)) return true;
+              applyToLabels(self.ui, self.ptr, lvl, "normal-mode-percentage", "practice-mode-percentage");
+              return true;
+            },
+          },
+          { priority: -3999 },
+        );
+        mod.modify(
+          "PauseLayer",
+          {
+            customSetup(self) {
+              self.orig();
+              if (!getBool("enabled")) return;
+              const level = game.level;
+              if (!level || isPlatformer(level)) return;
+              applyToLabels(self.ui, self.ptr, level, "normal-progress-label", "practice-progress-label", { hundred: true });
+            },
+          },
+          { priority: -3999 },
+        );
+        mod.modify(
+          "LevelPage",
+          {
+            updateDynamicPage(self) {
+              self.orig();
+              if (!getBool("enabled")) return;
+              const level = self.arg(1);
+              if (!level || isPlatformer(level)) return;
+              applyToLabels(self.ui, self.ptr, level, "normal-progress-label", "practice-progress-label", { hundred: true, positive: true });
+            },
+          },
+          { priority: -3999 },
+        );
+        mod.modify(
+          "LevelCell",
+          {
+            loadFromLevel(self) {
+              self.orig();
+              if (!getBool("enabled") || getBool("ignoreLevelCell")) return;
+              const ui = self.ui,
+                level = self.arg(1);
+              if (!level || isPlatformer(level)) return;
+              const percent = labelByID(ui, self.ptr, "percentage-label");
+              if (!percent) return;
+              const dpAsString = decimalPercentAsString(level, false, false);
+              if (dpAsString === "0%" || (dpAsString.startsWith("0.") && TRAILING_ZEROES_REGEX.test(dpAsString) && getBool("noTrailingZeros"))) return;
+              const dpAsFloat = asFloat(dpAsString.slice(0, -1)) ?? -1;
+              if (dpAsFloat <= 0) return;
+              if (Math.trunc(dpAsFloat) !== int(level, "normalPercent")) {
+                let percentString = ui.getString(percent);
+                if (!percentString.endsWith("%") && percentString.length < 2) return;
+                percentString = percentString.slice(0, -1);
+                if (!percentString) return;
+                if (dpAsString.split(".")[0] !== percentString) return;
+              }
+              if (ALL_ZEROES_REGEX.test(dpAsString)) return;
+              ui.setText(percent, dpAsString);
+            },
+          },
+          { priority: -3999 },
+        );
+        mod.modify(
+          "PlayLayer",
+          {
+            showNewBest(self) {
+              self.orig();
+              const layer = self.ptr,
+                level = game.level;
+              if (!getBool("enabled") || !level || isPlatformer(level)) return;
+              // queueInMainThread: the "x%" label of the new best bubble.
+              loader.runOnGameThread((call) => {
+                if (game.playLayer !== layer) return;
+                const ui = Geode.cocos(call);
+                for (const child of ui.children(layer)) {
+                  if (mem.i32(child + Z_ORDER) !== 100) continue;
+                  for (const grandchild of ui.children(child)) {
+                    if (ui.className(grandchild) !== "CCLabelBMFont") continue;
+                    const labelString = ui.getString(grandchild);
+                    if (!labelString.endsWith("%")) continue;
+                    if (getBool("logging")) mod.log.info("label->getString():", labelString);
+                    ui.setText(grandchild, ui.inv("PlayLayer::getCurrentPercent", [layer]).f32.toFixed(getDecimalPlaces()) + "%");
+                    return;
+                  }
+                }
+              });
+            },
+            updateProgressbar(self) {
+              self.orig();
+              const ui = self.ui,
+                level = game.level,
+                label = mem.ptr(self.ptr + game.OFF.percentageLabel);
+              if (!getBool("enabled") || getBool("ignorePercentageLabel") || !level || isPlatformer(level) || !label) return;
+              const percentLabelText = ui.getString(label),
+                match = percentLabelText.match(PERCENTAGE_REGEX);
+              if (!match) return;
+              const newBestSeparator = match[1],
+                possiblyNewBest = match[2];
+              if (!newBestSeparator || !possiblyNewBest || !possiblyNewBest.endsWith("%")) return;
+              const newBestWithoutPercent = possiblyNewBest.slice(0, -1);
+              if (!/^\d+$/.test(newBestWithoutPercent)) return;
+              const best = parseInt(newBestWithoutPercent, 10),
+                practice = game.isPractice();
+              if (best !== int(level, "normalPercent") && !practice) return;
+              if (best !== int(level, "practicePercent") && practice && !game.isTestMode()) return;
+              if (best <= 0) return;
+              ui.setText(label, percentLabelText.replace(newBestSeparator + possiblyNewBest, newBestSeparator + decimalPercentAsString(level, practice)));
+            },
+          },
+          { priorities: { updateProgressbar: -3999 } },
+        );
       });
     })();
     // Geode Web: register every Geode mod's hooks (before the game loads).
