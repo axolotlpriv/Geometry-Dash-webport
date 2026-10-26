@@ -7,5 +7,8 @@
   "compatibility_date": "2026-10-23",
   "assets": {
     "directory": "."
-  }
+  },
+  // Preview builds (`wrangler preview`) need this block; the site has no
+  // bindings, so it's empty.
+  "previews": {}
 }
