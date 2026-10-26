@@ -16591,6 +16591,7 @@ self.onmessage = async ({ data: e }) => {
           s.displayButtons = [
             ["small", "GJ_smallModeIcon_001.png"],
             ["big", "GJ_extendedIcon_001.png"],
+            ["grid", "grid-view"],
           ].map(([id, icon]) => {
             const button = ui.button(ui.squareSprite(icon, s.display === id), (k) => this.setDisplay(k, id));
             ui.add(displayMenu, button);
@@ -16805,16 +16806,23 @@ self.onmessage = async ({ data: e }) => {
           this.clearList(ui);
           this.showStatus(ui, s.entries.length ? "" : s.tab === "installed" || s.search[s.tab] ? "No mods found" : "No mods", false);
           const [width, height] = s.listSize,
-            cellHeight = s.display === "big" ? 40 : 30,
+            grid = s.display === "grid",
             gap = 2.5,
-            total = s.entries.length * (cellHeight + gap),
+            // Grid view: cards about 80 wide, 100 tall, in rows (ModListItem).
+            columns = grid ? Math.max(1, Math.round((width - 7.5) / 80)) : 1,
+            cellWidth = grid ? (width - 7.5) / columns : width,
+            cellHeight = grid ? 100 : s.display === "big" ? 40 : 30,
+            rows = Math.ceil(s.entries.length / columns),
+            total = rows * (cellHeight + gap),
             contentHeight = Math.max(total, height);
           s.cells = s.entries.map((entry, i) => {
-            const cell = buildModItem(ui, entry, width, cellHeight, s.display);
-            cell.y = contentHeight - i * (cellHeight + gap) - cellHeight / 2;
+            const cell = buildModItem(ui, entry, cellWidth, cellHeight, s.display),
+              column = i % columns,
+              row = Math.floor(i / columns);
+            cell.y = contentHeight - row * (cellHeight + gap) - cellHeight / 2;
             cell.height = cellHeight;
             cell.shown = true;
-            ui.pos(cell.node, width / 2, cell.y);
+            ui.pos(cell.node, grid ? column * (cellWidth + gap) + cellWidth / 2 : width / 2, cell.y);
             ui.add(s.scroll.content, cell.node);
             return cell;
           });
@@ -16908,27 +16916,35 @@ self.onmessage = async ({ data: e }) => {
         const local = entry.kind === "mod" ? entry.mod : Geode.getMod(entry.id),
           installed = !!local && !Geode.isUninstalled(entry.id);
         // Background.
-        const bg = ui.scale9("square02b_small.png", (width - 6) / 0.7, height / 0.7);
+        const grid = display === "grid";
+        const bg = ui.scale9("square02b_small.png", (grid ? width : width - 6) / 0.7, height / 0.7);
         ui.setID(bg, "bg");
         ui.scale(bg, 0.7);
         ui.addAt(node, bg, "Center");
         cell.bg = bg;
         // Logo.
-        const logoSize = height - 10;
+        // On grid view the logo has a constant size, at the top.
+        const logoSize = grid ? 30 : height - 10;
         const logo = modLogo(ui, entry, logoSize);
         ui.setID(logo, "logo-sprite");
         ui.limitSize(logo, logoSize, logoSize, 999, 0.1);
-        ui.pos(logo, height / 2 + 5, height / 2);
+        if (grid) ui.pos(logo, width / 2, height - 20);
+        else ui.pos(logo, height / 2 + 5, height / 2);
         ui.add(node, logo);
         // Info: title row, developer (and description in the big list).
         const info = ui.node(),
           scale = 0.4,
-          titleSpace = [width - 145, height - 5];
+          titleSpace = grid ? [width - 10, 35] : [width - 145, height - 5];
         ui.setID(info, "info-container");
         ui.scale(info, scale);
-        ui.anchor(info, 0, 0.5);
         ui.size(info, titleSpace[0] / scale, titleSpace[1] / scale);
-        ui.pos(info, height + 10, height / 2);
+        if (grid) {
+          ui.anchor(info, 0.5, 0.5);
+          ui.pos(info, width / 2, height / 2 - 5);
+        } else {
+          ui.anchor(info, 0, 0.5);
+          ui.pos(info, height + 10, height / 2);
+        }
         ui.add(node, info);
         const titleRow = ui.node();
         ui.setID(titleRow, "title-container");
@@ -16936,14 +16952,15 @@ self.onmessage = async ({ data: e }) => {
         const title = ui.label(entry.name.length > 40 ? entry.name.slice(0, 40) + "..." : entry.name, "bigFont.fnt");
         ui.setID(title, "title-label");
         Geode.Layout.options(title, { minScale: 0.5, maxScale: 1 });
-        ui.add(titleRow, title);
+        // On grid view the title sits above the row (version, downloads).
+        if (!grid) ui.add(titleRow, title);
         const version = ui.label(entry.version, "bigFont.fnt");
         ui.setID(version, "version-label");
         ui.color(version, Geode.colors["mod-list-version-label"]);
         Geode.Layout.options(version, { minScale: 0.7 * 0.7, maxScale: 0.7 });
         ui.add(titleRow, version);
         // Badges (featured, paid, api, joke).
-        if (entry.kind === "server") {
+        if (entry.kind === "server" && !grid) {
           for (const [has, sprite] of [[entry.featured, "tag-featured"], [entry.tags.includes("paid"), "tag-paid"], [entry.tags.includes("joke"), "tag-joke"], [entry.tags.includes("api"), "tag-api"]]) {
             if (!has) continue;
             const badge = ui.spr(sprite);
@@ -16952,9 +16969,42 @@ self.onmessage = async ({ data: e }) => {
             ui.add(titleRow, badge);
           }
         }
-        ui.setLayout(titleRow, Geode.Layout.simpleRow({ gap: 5, align: "start", autoScale: true, minScale: 0.5 }));
-        ui.anchor(titleRow, 0, 1);
-        ui.pos(titleRow, 0, titleSpace[1] / scale + (display === "big" ? 0 : 2));
+        if (grid) {
+          const [iw, ih] = [titleSpace[0] / scale, titleSpace[1] / scale];
+          ui.limitWidth(title, iw, 0.8, 0.1);
+          ui.pos(title, iw / 2, ih - 10);
+          ui.add(info, title);
+          // Download counts go next to the version, like on the website.
+          if (entry.kind === "server") {
+            const separator = ui.label("|", "bigFont.fnt", 0.7);
+            ui.color(separator, Geode.colors["mod-list-version-label"]);
+            ui.add(titleRow, separator);
+            const downloads = ui.label(abbreviate(entry.downloads), "bigFont.fnt", 0.7);
+            ui.color(downloads, Geode.colors["mod-list-version-label"]);
+            ui.add(titleRow, downloads);
+          }
+          ui.setLayout(titleRow, Geode.Layout.simpleRow({ gap: 10, align: "center", autoScale: true, minScale: 0.3 }));
+          ui.anchor(titleRow, 0.5, 0.5);
+          ui.pos(titleRow, iw / 2, ih / 2);
+          // Badges in the top left corner.
+          if (entry.kind === "server") {
+            let by = height - 4;
+            for (const [has, sprite] of [[entry.featured, "tag-featured"], [entry.tags.includes("paid"), "tag-paid"], [entry.tags.includes("joke"), "tag-joke"], [entry.tags.includes("api"), "tag-api"]]) {
+              if (!has) continue;
+              const badge = ui.spr(sprite);
+              ui.limitSize(badge, 30, 30, 1, 0.1);
+              ui.scale(badge, ui.getScale(badge) * 0.35);
+              ui.anchor(badge, 0, 1);
+              ui.pos(badge, 4, by);
+              ui.add(node, badge);
+              by -= ui.scaledSize(badge)[1] + 2;
+            }
+          }
+        } else {
+          ui.setLayout(titleRow, Geode.Layout.simpleRow({ gap: 5, align: "start", autoScale: true, minScale: 0.5 }));
+          ui.anchor(titleRow, 0, 1);
+          ui.pos(titleRow, 0, titleSpace[1] / scale + (display === "big" ? 0 : 2));
+        }
         ui.add(info, titleRow);
         // Developers (a button that searches the index for the developer).
         const devMenu = ui.menu();
@@ -16967,7 +17017,8 @@ self.onmessage = async ({ data: e }) => {
         ui.add(devMenu, devButton);
         const [dw, dh] = ui.scaledSize(devButton);
         ui.pos(devButton, dw / 2, dh / 2);
-        ui.pos(devMenu, 0, display === "big" ? titleSpace[1] / scale / 2 - dh / 2 : 3);
+        if (grid) ui.pos(devMenu, titleSpace[0] / scale / 2 - dw / 2, 10 - dh / 2);
+        else ui.pos(devMenu, 0, display === "big" ? titleSpace[1] / scale / 2 - dh / 2 : 3);
         ui.add(info, devMenu);
         cell.devLabel = devLabel;
         cell.title = title;
@@ -16990,8 +17041,8 @@ self.onmessage = async ({ data: e }) => {
         // View menu on the right: View / N/A, enable toggle, downloads.
         const viewMenu = ui.menu();
         ui.setID(viewMenu, "view-menu");
-        const menuScale = 0.55;
-        ui.size(viewMenu, width / menuScale / 2 - 20, 40);
+        const menuScale = grid ? 0.45 : 0.55;
+        ui.size(viewMenu, grid ? width / menuScale : width / menuScale / 2 - 20, 40);
         ui.scale(viewMenu, menuScale);
         const available = !!local;
         const viewSprite = available
@@ -17012,7 +17063,7 @@ self.onmessage = async ({ data: e }) => {
           ui.add(viewMenu, toggle);
           cell.toggle = toggle;
         }
-        if (entry.kind === "server") {
+        if (entry.kind === "server" && !grid) {
           const downloads = ui.node(),
             count = ui.label(abbreviate(entry.downloads), "bigFont.fnt"),
             icon = ui.frame("GJ_downloadsIcon_001.png");
@@ -17032,9 +17083,16 @@ self.onmessage = async ({ data: e }) => {
           ui.scale(downloads, 0.6);
           ui.add(viewMenu, downloads);
         }
-        ui.setLayout(viewMenu, Geode.Layout.simpleRow({ gap: 10, align: "start", mirror: true, autoScale: true, minScale: 0.1 }));
-        ui.anchor(viewMenu, 1, 0.5);
-        ui.addAt(node, viewMenu, "Right", [-10, 0]);
+        if (grid) {
+          // Centered at the bottom of the card.
+          ui.setLayout(viewMenu, Geode.Layout.simpleRow({ gap: 10, align: "center", autoScale: true, minScale: 0.1 }));
+          ui.anchor(viewMenu, 0.5, 0);
+          ui.addAt(node, viewMenu, "Bottom", [0, 5]);
+        } else {
+          ui.setLayout(viewMenu, Geode.Layout.simpleRow({ gap: 10, align: "start", mirror: true, autoScale: true, minScale: 0.1 }));
+          ui.anchor(viewMenu, 1, 0.5);
+          ui.addAt(node, viewMenu, "Right", [-10, 0]);
+        }
         cell.update = (k) => {
           const enabled = entry.kind !== "mod" || local.isEnabled();
           if (entry.kind === "mod") {
@@ -20268,6 +20326,7 @@ self.onmessage = async ({ data: e }) => {
         "GameManager::fadeInMusic": 0x57bba0,
         "FMODAudioEngine::playMusic": 0x45a140,
         "GameLevelManager::sharedState": 0x542d10,
+        "GameLevelManager::getGJRewards": 0x566020,
         "SecretRewardsLayer::scene": 0x7d2510,
         "SecretRewardsLayer::onBack": 0x7d7c20,
         "SecretRewardsLayer::onShop": 0x7d66d0,
@@ -20282,6 +20341,7 @@ self.onmessage = async ({ data: e }) => {
         CHALLENGE_CAN_CLAIM = 0x64,
         REWARD_TIME_REMAINING = 0x3c,
         TAG = 0x10, // CCObject::m_nTag
+        GLM_REWARD_DELEGATE = 0x358,
         ID = "km7dev.quests_in_pause_menu";
       const WHITE = () => ({ bytes: new Uint8Array([255, 255, 255, 0]) });
 
@@ -20296,11 +20356,14 @@ self.onmessage = async ({ data: e }) => {
             count = Geode.cocosFunction("?count@CCDictionary@cocos2d@@QEAAIXZ"),
             objectForKey = Geode.cocosFunction("?objectForKey@CCDictionary@cocos2d@@QEAAPEAVCCObject@2@_J@Z");
           if (!items || Geode.rtti(items) !== "CCDictionary" || !count || !objectForKey) return false;
-          // No chest data yet. The mod asks the server for it here; on the
-          // web the game's requests share one queue, so a slow chest request
-          // held up everything else online. It shows once the chests have
-          // been opened.
-          if (!ui.inv(count, [items]).int) return false;
+          if (!ui.inv(count, [items]).int) {
+            const glm = ui.ptr("GameLevelManager::sharedState");
+            if (glm) {
+              mem.setPtr(glm + GLM_REWARD_DELEGATE, 0);
+              ui.inv("GameLevelManager::getGJRewards", [glm, 0]);
+            }
+            return false;
+          }
           // "theres a chance these are backwards"
           const bigChest = ui.ptr(objectForKey, [items, 1]),
             smallChest = ui.ptr(objectForKey, [items, 2]);
@@ -22577,6 +22640,8 @@ self.onmessage = async ({ data: e }) => {
       const mem = Geode.mem,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
+        "GameLevelManager::sharedState": 0x542d10,
+        "GameLevelManager::getGJRewards": 0x566020,
         "RewardsPage::rewardsStatusFinished": 0x7cd490,
       });
       const ID = "lilnibblit.chestalert",
@@ -22584,14 +22649,18 @@ self.onmessage = async ({ data: e }) => {
         TIME_REMAINING = 0x3c; // GJRewardItem::m_timeRemaining
 
       Geode.port(ID, {}, (mod) => {
+        const getGJRewards = (ui) => ui.inv("GameLevelManager::getGJRewards", [ui.ptr("GameLevelManager::sharedState"), 0]);
+        let loaded = false;
         mod.modify("MenuLayer", {
           init(self) {
             if (!self.origBool()) return false;
             const ui = self.ui;
-            // The mod asks the server for the chest data ($on_mod(Loaded) and
-            // here). On the web the game's online requests share one queue,
-            // so a slow chest request held everything else up; the mark uses
-            // the data the game already has (from opening the chests).
+            // $on_mod(Loaded): get the chest data so the chest menu needn't
+            // be opened first.
+            if (!loaded) {
+              loaded = true;
+              getGJRewards(ui);
+            }
             const mark = ui.frame("exMark_001.png");
             ui.pos(mark, 40, 35);
             ui.scale(mark, 0.55);
@@ -22601,6 +22670,8 @@ self.onmessage = async ({ data: e }) => {
               count = Geode.cocosFunction("?count@CCDictionary@cocos2d@@QEAAIXZ"),
               objectForKey = Geode.cocosFunction("?objectForKey@CCDictionary@cocos2d@@QEAAPEAVCCObject@2@_J@Z");
             if (items && count && objectForKey) {
+              // No chest data yet.
+              if (!ui.inv(count, [items]).int) getGJRewards(ui);
               const item = (key) => {
                 const p = ui.ptr(objectForKey, [items, key]);
                 return p && Geode.rtti(p) === "GJRewardItem" ? p : 0;
