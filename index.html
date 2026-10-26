@@ -14525,12 +14525,14 @@ self.onmessage = async ({ data: e }) => {
       }
       let keybindCapture = null;
       const keysDown = new Set();
-      function dispatchKeybind(event, down) {
+      // While typing only "allow-in-text-inputs" keybinds fire.
+      function dispatchKeybind(event, down, typing = false) {
         const bind = keybindFromEvent(event),
           plain = keyNameFromCode(event.code);
         for (const mod of mods) {
           if (!mod.isEnabled() || !mod.keybindListeners.size) continue;
           for (const [key, fns] of mod.keybindListeners) {
+            if (typing && !(mod.settingDefs.find((s) => s.key === key) || {}).allowInTextInputs) continue;
             const binds = mod.getSettingValue(key) || [];
             // Releases match on the key alone (the modifiers may be up already).
             if (!binds.some((b) => (down ? b === bind : b === plain || b.endsWith("+" + plain)))) continue;
@@ -14556,9 +14558,9 @@ self.onmessage = async ({ data: e }) => {
             if (!event.repeat) keybindCapture(event);
             return;
           }
-          if (typingInPage(event) || window.__gdModsOpen || window.__gdKeybindsOpen || ui.typing) return;
+          if (window.__gdModsOpen || window.__gdKeybindsOpen) return;
           if (!event.repeat) keysDown.add(event.code);
-          dispatchKeybind(event, true);
+          dispatchKeybind(event, true, typingInPage(event) || ui.typing);
         },
         true,
       );
@@ -14571,7 +14573,7 @@ self.onmessage = async ({ data: e }) => {
             return;
           }
           if (!keysDown.delete(event.code)) return;
-          dispatchKeybind(event, false);
+          dispatchKeybind(event, false, typingInPage(event) || ui.typing);
         },
         true,
       );
@@ -14625,6 +14627,7 @@ self.onmessage = async ({ data: e }) => {
           display: def.display || null,
           buttons: def.buttons || null,
           custom: def.custom || custom,
+          allowInTextInputs: !!def["allow-in-text-inputs"],
         };
         if (type === "int" || type === "float") {
           const range = setting.max !== undefined && setting.min !== undefined;
@@ -15435,11 +15438,9 @@ self.onmessage = async ({ data: e }) => {
           getChildByID: (parent, id) => Geode.ids.child(ui, parent, id),
           getChildByIDRecursive: (parent, id) => Geode.ids.find(ui, parent, id),
           className: (node) => Geode.rtti(node),
-          // CCLabelBMFont::getString
-          getString(node) {
-            const getString = Geode.cocosFunction("?getString@CCLabelBMFont@cocos2d@@UEAAPEBDXZ");
-            return node && getString ? mem.cString(ui.ptr(getString, [node])) : "";
-          },
+          // CCLabelBMFont::getString: its m_sInitialStringUTF8 (getString
+          // itself wants the CCLabelProtocol base as `this`).
+          getString: (node) => (node ? mem.gdString(node + 0x1a8) : ""),
           getAnchor(node) {
             const p = node + NODE.anchor;
             return [mem.f32(p), mem.f32(p + 4)];
@@ -18741,22 +18742,21 @@ self.onmessage = async ({ data: e }) => {
             for (const child of ui.children(right)) if (menuX + ui.getPos(child)[0] < w / 2 && ui.getPos(child)[1] + ui.getPos(right)[1] < h * 0.8) switchToMenu(ui, child, left);
             Geode.Layout.set(left, Geode.Layout.column());
             ui.updateLayout(left);
+            // setupProgressBars' labels: the percentages (normal above
+            // practice) and the mode labels over them. (Found by text here;
+            // hooking setupProgressBars itself breaks the page.)
+            const labels = ui.children(layer).filter((c) => ui.className(c) === "CCLabelBMFont");
+            const percents = labels.filter((l) => /^\d+%$/.test(ui.getString(l))).sort((a, b) => ui.getPos(b)[1] - ui.getPos(a)[1]);
+            if (percents[0]) ui.setID(percents[0], "normal-mode-percentage");
+            if (percents[1]) ui.setID(percents[1], "practice-mode-percentage");
+            for (const label of labels) {
+              const text = ui.getString(label);
+              if (text === "Normal Mode") ui.setID(label, "normal-mode-label");
+              else if (text === "Practice Mode") ui.setID(label, "practice-mode-label");
+            }
           } catch (idError) {
             Geode.log.error("LevelInfoLayer IDs failed:", idError);
           }
-        },
-        { priority: FIRST },
-      );
-      // LevelInfoLayer::setupProgressBars: the bars and labels it just added.
-      nodeIds.hook(
-        "LevelInfoLayer::setupProgressBars",
-        (call) => {
-          call.callOriginal();
-          const ui = Geode.cocos(call),
-            children = ui.children(call.arg(0)),
-            n = children.length,
-            ids = { 1: "practice-mode-label", 2: "practice-mode-percentage", 3: "practice-mode-bar", 5: "normal-mode-label", 6: "normal-mode-percentage", 7: "normal-mode-bar" };
-          for (const [back, id] of Object.entries(ids)) if (children[n - back]) ui.setID(children[n - back], id);
         },
         { priority: FIRST },
       );
@@ -18797,11 +18797,35 @@ self.onmessage = async ({ data: e }) => {
               [w] = ui.winSize(),
               menus = ui.children(layer).filter((c) => ui.className(c) === "CCMenu");
             // The menu whose buttons stand in a column at the right edge.
-            const actions = menus.find((menu) => {
-              const items = ui.children(menu);
-              return items.length >= 4 && items.every((item) => ui.getPos(menu)[0] + ui.getPos(item)[0] > w * 0.8);
-            });
-            if (actions) ui.setID(actions, "level-actions-menu");
+            const [, h] = ui.winSize();
+            const actions = menus.find((menu) => ui.children(menu).filter((item) => ui.getPos(menu)[0] + ui.getPos(item)[0] > w * 0.8).length >= 3);
+            if (actions) {
+              ui.setID(actions, "level-actions-menu");
+              // Like Node IDs: the buttons on the left (the folder button)
+              // leave it, and the rest become a column with a layout.
+              const [mx, my] = ui.getPos(actions),
+                items = ui.children(actions),
+                right = items.filter((item) => mx + ui.getPos(item)[0] > w / 2);
+              const folderMenu = ui.menu();
+              ui.setID(folderMenu, "folder-menu");
+              ui.pos(folderMenu, 0, 0);
+              ui.add(layer, folderMenu);
+              for (const item of items) {
+                if (right.includes(item)) continue;
+                const [ix, iy] = ui.getPos(item);
+                switchToMenu(ui, item, folderMenu);
+                ui.pos(item, mx + ix, my + iy);
+              }
+              if (right.length) {
+                ui.pos(actions, mx + ui.getPos(right[0])[0], h / 2);
+                ui.size(actions, 60, h - 100);
+                ui.ignoreAnchor(actions, false);
+                ui.anchor(actions, 0.5, 0.5);
+                ui.z(actions, 1);
+                Geode.Layout.set(actions, Geode.Layout.column({ gap: 5, reverse: true }));
+                ui.updateLayout(actions);
+              }
+            }
           } catch (idError) {
             Geode.log.error("EditLevelLayer IDs failed:", idError);
           }
@@ -22232,6 +22256,319 @@ self.onmessage = async ({ data: e }) => {
           };
           ui.showPopup(popup);
         }
+      });
+    })();
+    // Enter Search (iswilljr.enter-search), ported from
+    // github.com/iswilljr/enter-search-gd: Enter searches in the search page.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+
+      Geode.port("iswilljr.enter-search", {}, (mod) => {
+        let searchLayer = 0;
+        mod.modify("LevelSearchLayer", {
+          init(self) {
+            if (!self.origBool()) return false;
+            searchLayer = self.ptr;
+            // Node IDs names the layer after its class.
+            if (!self.ui.getID(self.ptr)) self.ui.setID(self.ptr, "LevelSearchLayer");
+            return true;
+          },
+        });
+        // addEventListener(KeybindSettingPressedEventV3(..., "enterSearch"))
+        mod.onKeybind("enterSearch", (down, repeat) => {
+          if (!down || repeat || !searchLayer) return;
+          Geode.loader.runOnGameThread((call) => {
+            const ui = Geode.cocos(call),
+              levelSearch = ui.getChildByID(ui.runningScene(), "LevelSearchLayer");
+            if (levelSearch && levelSearch === searchLayer) ui.inv("LevelSearchLayer::onSearch", [searchLayer, 0]);
+          });
+        });
+      });
+    })();
+    // XXLify (ziegenhainy.xxlify), ported from github.com/ziegenhainy/XXLify:
+    // long levels get XL, XXL, XXXL... (or X^nL) instead of plain "XL".
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game,
+        LV = game.LV;
+      Object.assign(Geode.loader.addresses, {
+        "LevelInfoLayer::setupLevelInfo": 0x6fae10,
+        "LevelInfoLayer::levelDownloadFinished": 0x6fba60,
+      });
+      const TIMESTAMP = 0x4c8, // GJGameLevel::m_timestamp
+        LEVEL_STRING = 0x198; // GJGameLevel::m_levelString
+
+      // From CVolton's BetterInfo (cvoltonLevelTime.cpp): the level's length
+      // from its speed portals, for levels saved before 2.2.
+      const speedToPortalId = (speed) => ({ 1: 200, 2: 202, 3: 203, 4: 1334 })[speed] || 201;
+      const travelForPortalId = (id) => ({ 200: 251.16008, 202: 387.42014, 203: 468.00015, 1334: 576.00018 })[id] || 311.58011;
+      const isSpeedPortal = (id) => id === 200 || id === 201 || id === 202 || id === 203 || id === 1334;
+      async function decodeBase64Gzip(input) {
+        const b64 = input.replace(/[^A-Za-z0-9+/_-]/g, "").replace(/-/g, "+").replace(/_/g, "/");
+        const bytes = Uint8Array.from(atob(b64 + "===".slice((b64.length + 3) % 4)), (c) => c.charCodeAt(0));
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+        return new Response(stream).text();
+      }
+      async function timeForLevelString(levelString) {
+        const decompressed = await decodeBase64Gzip(levelString);
+        const speedPortals = [];
+        let prevPortalX = 0,
+          prevPortalId = 0,
+          timeFull = 0,
+          maxPos = 0;
+        for (const currentObject of decompressed.split(";")) {
+          let objID = 0,
+            xPos = 0,
+            checked = false,
+            keyID = "";
+          const parts = currentObject.split(",");
+          for (let i = 0; i < parts.length; i++) {
+            if (i % 2 === 0) keyID = parts[i];
+            else if (keyID === "1") objID = parseInt(parts[i], 10) || 0;
+            else if (keyID === "2") xPos = parseFloat(parts[i]) || 0;
+            else if (keyID === "13") checked = !!(parseInt(parts[i], 10) || 0);
+            else if (keyID === "kA4") prevPortalId = speedToPortalId(parseInt(parts[i], 10) || 0);
+            if (xPos !== 0 && objID !== 0 && checked) break;
+          }
+          if (maxPos < xPos) maxPos = xPos;
+          if (!checked || !isSpeedPortal(objID)) continue;
+          speedPortals.push({ id: objID, xPos });
+        }
+        speedPortals.sort((a, b) => a.xPos - b.xPos);
+        for (const portal of speedPortals) {
+          timeFull += (portal.xPos - prevPortalX) / travelForPortalId(prevPortalId);
+          prevPortalId = portal.id;
+          prevPortalX = portal.xPos;
+        }
+        timeFull += (maxPos - prevPortalX) / travelForPortalId(prevPortalId);
+        return timeFull / 60;
+      }
+
+      Geode.port("ziegenhainy.xxlify", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        const logBaseN = (x, n) => Math.trunc(Math.log(x) / Math.log(n));
+        function createXLstring(levelLengthMinutes) {
+          let XLstring = "";
+          const maximumXs = setting("maximum-xs"),
+            usingPowerNotation = setting("use-power-notation"),
+            usingXXLplus = setting("xxl-plus"),
+            xxlScaling = setting("xxl-scaling");
+          let lengthExponent = logBaseN(levelLengthMinutes / 2, xxlScaling) + 1;
+          if (usingPowerNotation && lengthExponent > maximumXs) XLstring += "X^" + lengthExponent;
+          else {
+            if (lengthExponent > maximumXs) lengthExponent = maximumXs;
+            for (let i = 0; i < lengthExponent; i++) {
+              if (i % 10 === 0 && i !== 0) XLstring += "\n";
+              XLstring += "X";
+            }
+          }
+          XLstring += "L";
+          if (!usingXXLplus) return XLstring;
+          const XXLPlusLength = Math.pow(xxlScaling, lengthExponent) + Math.pow(xxlScaling, lengthExponent - 1);
+          if (levelLengthMinutes >= XXLPlusLength) XLstring += "+";
+          return XLstring;
+        }
+        // LevelInfoLayer::m_lengthLabel: six pointers after m_level.
+        function lengthLabel(layer, level) {
+          for (let offset = 0x1d0; offset < 0x300; offset += 8) {
+            if (mem.ptr(layer + offset) !== level) continue;
+            const label = mem.ptr(layer + offset + 48);
+            return Geode.rtti(label) === "CCLabelBMFont" ? label : 0;
+          }
+          return 0;
+        }
+        function modifyXLlabel(ui, label, levelLengthMinutes) {
+          const XLstring = createXLstring(levelLengthMinutes),
+            lines = XLstring.split("\n").length;
+          ui.setText(label, XLstring);
+          // Line wrapping needs a new anchor point.
+          if (lines > 1) {
+            ui.anchor(label, 0, 1);
+            const [x, y] = ui.getPos(label);
+            ui.pos(label, x, y + 8.125);
+          }
+          if (setting("use-color")) {
+            const maxCol = setting("maximum-color"),
+              labelCol = setting("label-color"),
+              colT = levelLengthMinutes < maxCol ? levelLengthMinutes / maxCol : 1;
+            ui.color(label, [0, 1, 2].map((i) => Math.round(255 + (labelCol[i] - 255) * colT)));
+          }
+        }
+        function createXLlabel(ui, layer, level) {
+          if (!level || mem.i32(level + LV.levelLength) === 5) return;
+          const label = lengthLabel(layer, level);
+          if (!label) return;
+          const levelLengthMinutes = mem.i32(level + TIMESTAMP) / 14400;
+          if (levelLengthMinutes <= 0) {
+            // createXLlabelCvolton (on another thread in the mod).
+            const levelString = mem.gdString(level + LEVEL_STRING);
+            if (!levelString) return;
+            ui.retain(layer);
+            timeForLevelString(levelString)
+              .then((minutes) => {
+                mod.log.info("Timestamp not found, estimated " + minutes + "m long");
+                Geode.loader.runOnGameThread((call) => {
+                  const k = Geode.cocos(call);
+                  if (minutes >= 1.5) {
+                    if (minutes < 2) {
+                      if (setting("long-plus")) k.setText(label, "Long+");
+                    } else modifyXLlabel(k, label, minutes);
+                  }
+                  k.release(layer);
+                });
+              })
+              .catch(() => Geode.loader.runOnGameThread((call) => Geode.cocos(call).release(layer)));
+            return;
+          }
+          mod.log.info("Timestamp found, level is " + levelLengthMinutes + "m long");
+          if (levelLengthMinutes < 1.5) return;
+          if (levelLengthMinutes < 2) {
+            if (setting("long-plus")) ui.setText(label, "Long+");
+            return;
+          }
+          modifyXLlabel(ui, label, levelLengthMinutes);
+        }
+        const levelOf = (layer) => Geode.member(layer, "GJGameLevel", "LevelInfoLayer.level", 0x1d0, 0x300);
+        mod.modify("LevelInfoLayer", {
+          setupLevelInfo(self) {
+            self.orig();
+            createXLlabel(self.ui, self.ptr, levelOf(self.ptr));
+          },
+          levelDownloadFinished(self) {
+            self.orig();
+            createXLlabel(self.ui, self.ptr, levelOf(self.ptr));
+          },
+        });
+      });
+    })();
+    // Custom Icon Size (abb2k.custom_icon_size), ported from
+    // github.com/abb2k/Custom-icon-size: scales the player icons in levels.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        game = Geode.game;
+      const MAIN_LAYER = 0x558; // PlayerObject::m_mainLayer
+
+      Geode.port("abb2k.custom_icon_size", {}, (mod) => {
+        const setting = (key) => mod.getSettingValue(key);
+        // Settings: the "icon" (IconType::Special) values.
+        const iconScale = () => setting("icon-size-overall"),
+          extraEnabled = () => setting("icon-size-extra-enabled"),
+          iconScaleX = () => setting("icon-size-x"),
+          iconScaleY = () => setting("icon-size-y");
+        let scheduledOn = 0;
+        mod.modify("PlayLayer", {
+          init(self) {
+            if (!self.origBool()) return false;
+            // schedule(schedule_selector(BISPlayLayer::myUpdate))
+            scheduledOn = setting("mod-enabled") ? self.ptr : 0;
+            return true;
+          },
+        });
+        // myUpdate, every frame while that level is open.
+        Geode.loader.onFrame((call) => {
+          if (!scheduledOn || game.playLayer !== scheduledOn || !mod.isEnabled()) return;
+          const ui = Geode.cocos(call),
+            getScaleX = Geode.cocosFunction("?getScaleX@CCNode@cocos2d@@UEAAMXZ"),
+            getScaleY = Geode.cocosFunction("?getScaleY@CCNode@cocos2d@@UEAAMXZ");
+          if (!getScaleX || !getScaleY) return;
+          for (const player of [game.player(1), game.player(2)]) {
+            if (!player) continue;
+            const mainLayer = mem.ptr(player + MAIN_LAYER);
+            if (!mainLayer) continue;
+            const isNegative = ui.inv(getScaleY, [mainLayer]).f32 < 0,
+              isFlipped = ui.inv(getScaleX, [mainLayer]).f32 < 0;
+            const x = extraEnabled() ? iconScaleX() : iconScale(),
+              y = extraEnabled() ? iconScaleY() : iconScale();
+            ui.scaleXY(mainLayer, isFlipped ? -x : x, isNegative ? -y : y);
+          }
+        });
+      });
+    })();
+    // Chest Alert (lilnibblit.chestalert), ported from
+    // github.com/lilnibblit/Chest-Alert: a "!" on the main menu's daily chest
+    // button when a chest is ready.
+    (function () {
+      const Geode = window.Geode;
+      if (!Geode) return;
+      const mem = Geode.mem,
+        loader = Geode.loader;
+      Object.assign(loader.addresses, {
+        "GameLevelManager::sharedState": 0x542d10,
+        "GameLevelManager::getGJRewards": 0x566020,
+        "RewardsPage::rewardsStatusFinished": 0x7cd490,
+      });
+      const ID = "lilnibblit.chestalert",
+        REWARD_ITEMS = 0x210, // GameStatsManager::m_rewardItems
+        TIME_REMAINING = 0x3c; // GJRewardItem::m_timeRemaining
+
+      Geode.port(ID, {}, (mod) => {
+        const getGJRewards = (ui) => ui.inv("GameLevelManager::getGJRewards", [ui.ptr("GameLevelManager::sharedState"), 0]);
+        let loaded = false;
+        mod.modify("MenuLayer", {
+          init(self) {
+            if (!self.origBool()) return false;
+            const ui = self.ui;
+            // $on_mod(Loaded): get the chest data so the chest menu needn't
+            // be opened first.
+            if (!loaded) {
+              loaded = true;
+              getGJRewards(ui);
+            }
+            const mark = ui.frame("exMark_001.png");
+            ui.pos(mark, 40, 35);
+            ui.scale(mark, 0.55);
+            ui.visible(mark, false);
+            const gsm = ui.ptr("GameStatsManager::sharedState"),
+              items = mem.ptr(gsm + REWARD_ITEMS),
+              count = Geode.cocosFunction("?count@CCDictionary@cocos2d@@QEAAIXZ"),
+              objectForKey = Geode.cocosFunction("?objectForKey@CCDictionary@cocos2d@@QEAAPEAVCCObject@2@_J@Z");
+            if (items && count && objectForKey) {
+              // No chest data yet.
+              if (!ui.inv(count, [items]).int) getGJRewards(ui);
+              const item = (key) => {
+                const p = ui.ptr(objectForKey, [items, key]);
+                return p && Geode.rtti(p) === "GJRewardItem" ? p : 0;
+              };
+              const time1 = item(1),
+                time2 = item(2);
+              if ((time1 || time2) && ((time1 && mem.i32(time1 + TIME_REMAINING) === 0) || (time2 && mem.i32(time2 + TIME_REMAINING) === 0))) ui.visible(mark, true);
+            }
+            const button = ui.getChildByIDRecursive(self.ptr, "daily-chest-button");
+            if (button) {
+              ui.add(button, mark);
+              ui.setID(mark, ID + "/mark");
+            }
+            return true;
+          },
+        });
+        // RewardsPage::m_leftOpen / m_rightOpen, after its two labels and two
+        // chest buttons.
+        function chestsOpen(page) {
+          for (let offset = 0x270; offset < 0x300; offset += 8) {
+            const r = (o) => Geode.rtti(mem.ptr(page + offset + o));
+            if (r(0) === "CCLabelBMFont" && r(8) === "CCLabelBMFont" && r(16) === "CCMenuItemSpriteExtra" && r(24) === "CCMenuItemSpriteExtra")
+              return [!!mem.u8(page + offset + 32), !!mem.u8(page + offset + 33)];
+          }
+          return [true, true];
+        }
+        mod.modify("RewardsPage", {
+          rewardsStatusFinished(self) {
+            const ui = self.ui,
+              [leftOpen, rightOpen] = chestsOpen(self.ptr);
+            // "kostыli for hiding the mark after opening everything"
+            if (!leftOpen || !rightOpen) {
+              const dcb = ui.getChildByIDRecursive(ui.runningScene(), "daily-chest-button"),
+                mark = dcb && ui.getChildByID(dcb, ID + "/mark");
+              if (mark) ui.visible(mark, false);
+            }
+            self.orig();
+          },
+        });
       });
     })();
     // Geode Web: register every Geode mod's hooks (before the game loads).

@@ -113,7 +113,43 @@ A few options only work in the desktop mod and are shown greyed out: Discord Ric
 
 Cheats like noclip and speedhack turn on safe mode automatically (Auto Safe Mode), so they can't save progress.
 
-**Why not Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport. Globed is rebuilt the same way (with Globed's own sprites), but it can't reach Globed's servers, as explained above.
+**Why not real Geode?** This port runs the Windows game converted to WebAssembly ahead of time. Geode and Geode mods are Windows programs that patch the game's machine code, so they can't run here. The webport's mod loader hooks the same game functions Geode mods use, but mods have to be written for the webport; Geode mode (below) rebuilds Geode itself that way. Globed is rebuilt the same way (with Globed's own sprites), but it can't reach Globed's servers, as explained above.
+
+### Geode mode
+
+Geode mode replaces the webport's mod menu with **Geode Web**, a JavaScript remake of the [Geode](https://geode-sdk.org) mod loader: Geode's look and Geode's mod API, with Geode mods rewritten in JavaScript. It's off by default. Turn it on with the **Geode mode** switch at the bottom of the mod menu (the page reloads); turn it off again in Geode's own settings (the gear in the mods list, **Geode Mode (Web)**), which also reloads. With Geode mode off, the game and the mod menu work exactly as before.
+
+* **The mods list:** the green Geode button on the main menu's bottom row opens Geode's mods list, with its Installed, Featured, Download and Recent tabs, search and sorting, mod pages (description, changelog, enable/disable, uninstall, settings) and Geode's settings and keybinds popups. Featured, Download and Recent come from Geode's mod index; mods there that have no web version show as **N/A**. Geode's sprites (Boost Software License 1.0) are built into the page.
+* **The built-in mods** are listed under their Geode ids (Eclipse Menu, Click Between Frames, Jukebox, Globed and the rest) and keep working as before; their settings open in Geode's settings popup.
+* **The mod API** follows Geode's: `mod.json`-style metadata and settings (bool, int, float, string/one-of, keybind, color, file, title and custom settings), `$modify`-style hooks with `m_fields`, saved values, node IDs, row and column layouts, events, Geode-format logging, keybind listeners and Geode-style notifications. Mods can't run real `.geode` files: every mod is rewritten in JavaScript.
+
+These Geode mods are ported to Geode Web, following each mod's own source code:
+
+| Mod | Developer | What it does |
+| --- | --- | --- |
+| [Startpos Switcher](https://github.com/capeling/Startpos-Switcher) | capeling | Switch between start positions while playing, with arrows or keys. |
+| [Run Info](https://github.com/matcool/geode-mods) | mat | Shows Practice/Testmode and where your run started. |
+| [Death Tracker](https://github.com/abb2k/death-tracker) | abb2k | Keeps track of every death and run on a level, in its own window. |
+| [Golden Best](https://github.com/FireMario211/Golden-Best) | Firee | The percentage turns gold while you're beating your best. |
+| [Coins in Pause Menu](https://github.com/Weebifying/coins-in-pause-menu-geode) | Weebify | The level's coins in the pause menu. |
+| [Level Info in Pause Menu](https://github.com/Weebifying/lvlinfo-in-pause-geode) | Weebify | The level info button in the pause menu. |
+| [Geode In Pause Menu](https://github.com/hiimjasmine00/GeodeInPauseMenu) | hiimjasmine00 | Open the mods list from the pause menu and the level pages. |
+| [Hide Pause Menu](https://github.com/Zen-Zo/HidePauseMenuMod) | ZenZo | A button and keybinds to hide the pause menu. |
+| [Rewards in Pause Menu](https://codeberg.org/km7dev/rewards-in-pause) | km7dev | Chests, quests, paths and the treasure room from the pause menu. |
+| [Restart Buttons](https://github.com/Weebifying/restartbutton-geode) | Weebify | Restart (reloads the page) and reload-textures buttons on the main menu. |
+| [Death Message](https://github.com/BeatACVR/geode-deathmessages) | Beat | A random message when you die (edit the messages from its settings). |
+| [Randomize Icon on Death](https://github.com/kittenchilly/Randomize-Icon-on-Death) | kittenchilly | A new random icon, colors and effects every attempt. |
+| Coin Sounds | dominodev | A sound when you collect a coin (its source isn't public; this follows what the mod does). |
+| [DecimalPercentages](https://codeberg.org/RayDeeUx/DecimalPercentages) | TheSillyDoggo, RayDeeUx | Your best percentages with decimals. |
+| [Coins Progressbar](https://github.com/RainixGD/CoinsProgressbar) | rainixdev | The level's coins on the progress bar. |
+| [Go! Indicator](https://github.com/prevter/gd-go-indicator) | prevter | Your own markers on the progress bar. |
+| [Inputs Viewer](https://github.com/Khronophobia/Inputs-Viewer) | Khronophobia | Shows your inputs, total clicks and CPS while you play. |
+| [Enter Search](https://github.com/iswilljr/enter-search-gd) | iswilljr | `Enter` searches on the search page. |
+| [XXLify](https://github.com/ziegenhainy/XXLify) | ziegenhainy | XXL, XXXL... lengths for long levels. |
+| [Custom Icon Size](https://github.com/abb2k/Custom-icon-size) | abb2k | Change the size of your icon in levels. |
+| [Chest Alert](https://github.com/lilnibblit/Chest-Alert) | dotnet | A "!" on the daily chest button when a chest is ready. |
+
+Some things work differently on the web: settings and saved data are kept in your browser; "open folder" and file settings use your browser's file picker or an in-page editor; Restart Buttons reloads the page; and parts that need the desktop game or other desktop mods (more icons, separate dual icons, DLLs) are left out.
 
 ## Troubleshooting
 
@@ -162,5 +198,7 @@ When reporting a bug, please explain what happened and, if possible, how to repr
 * **Bog:** Creator of the web port.
 * **Ale7208:** Improvements and bug fixes.
 * **Eclipse Team** (ninXout, prevter, maxnut, Firee, SpaghettDev and contributors): Eclipse Menu, whose interface, themes, translations, label presets and assets the web version uses (Eclipse Public License 2.0; the Rubik, Poppins and Roboto fonts are under the SIL Open Font License).
+* **Geode Team:** the [Geode](https://github.com/geode-sdk/geode) mod loader, whose interface, sprites and mod API Geode mode remakes (Boost Software License 1.0), and Node IDs.
+* **Geode mod developers:** the authors of the mods ported in Geode mode, listed in the table above; each port follows the mod's own source, which is under the mod's own license.
 
 Geometry Dash belongs to its respective creator. This is an unofficial fan port and is not affiliated with or endorsed by RobTop Games.
