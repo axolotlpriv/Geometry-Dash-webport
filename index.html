@@ -3244,8 +3244,8 @@
 
       loader.gluePatches.push({
         name: "Jukebox song override",
-        find: "var data=null;var cands=this.candidates(path);",
-        replace: "var data=window.__gdSongOverride?window.__gdSongOverride(path):null;var cands=this.candidates(path);",
+        find: "        var data = null;\n        var cands = this.candidates(path);",
+        replace: "        var data = window.__gdSongOverride ? window.__gdSongOverride(path) : null;\n        var cands = this.candidates(path);",
       });
       window.__gdSongOverride = function (path) {
         const file = String(path).split(/[\\/]/).pop();
@@ -3518,15 +3518,33 @@
       // caps below the refresh rate, quick message-channel yields above it).
       loader.gluePatches.push(
         {
+          // The game's frame yield waits for the next animation frame (or,
+          // with ?fastframe, a message-channel turn). With a target set, wait
+          // until that much time has passed since the last frame instead.
           name: "FPS unlock and cap",
-          find: "if(document.hidden){await new Promise(function(res){setTimeout(res,50)})}else if(target_ms>0&&target_ms<Module.gdRafInterval*.9){await new Promise(function(res){Module.gdFastQ.push(res);Module.gdFastPort.postMessage(0)})}else{await new Promise(function(res){requestAnimationFrame(function(){res()})})}",
+          find: "    if (document.hidden) {\n      await new Promise(function(res) {\n        setTimeout(res, 50);\n      });\n    } else if (Module.gdForceFast) {",
           replace:
-            "var gdTarget=Module.gdFrameTargetMs||target_ms,gdStart=Module.gdLastFrameEnd||0;if(document.hidden){await new Promise(function(res){setTimeout(res,50)})}else if(gdTarget>0&&gdTarget<Module.gdRafInterval*.9){do{await new Promise(function(res){Module.gdFastQ.push(res);Module.gdFastPort.postMessage(0)})}while(Module.gdFrameTargetMs&&performance.now()-gdStart<gdTarget)}else{do{await new Promise(function(res){requestAnimationFrame(function(){res()})})}while(Module.gdFrameTargetMs&&performance.now()-gdStart<gdTarget-Module.gdRafInterval*.5)}Module.gdLastFrameEnd=performance.now();",
+            "    var gdTarget = Module.gdFrameTargetMs || 0, gdStart = Module.gdLastFrameEnd || 0;\n" +
+            "    if (gdTarget > 0 && !document.hidden) {\n" +
+            "      if (gdTarget < Module.gdRafInterval * .9) {\n" +
+            "        do { await new Promise(function(res) { Module.gdFastQ.push(res); Module.gdFastPort.postMessage(0); }); } while (Module.gdFrameTargetMs && performance.now() - gdStart < gdTarget);\n" +
+            "      } else {\n" +
+            "        do { await new Promise(function(res) { requestAnimationFrame(function() { res(); }); }); } while (Module.gdFrameTargetMs && performance.now() - gdStart < gdTarget - Module.gdRafInterval * .5);\n" +
+            "      }\n" +
+            "      Module.gdLastFrameEnd = performance.now();\n" +
+            "      return;\n" +
+            "    }\n" +
+            "    if (document.hidden) {\n      await new Promise(function(res) {\n        setTimeout(res, 50);\n      });\n    } else if (Module.gdForceFast) {",
+        },
+        {
+          name: "FPS cap frame end",
+          find: "        raf = requestAnimationFrame(fire);\n        timer = setTimeout(fire, 250);\n      });\n    }\n  });\n}",
+          replace: "        raf = requestAnimationFrame(fire);\n        timer = setTimeout(fire, 250);\n      });\n    }\n    Module.gdLastFrameEnd = performance.now();\n  });\n}",
         },
         {
           name: "Anti-aliasing option",
-          find: "antialias:!!HEAP8[attributes+3>>>0]",
-          replace: "antialias:window.__gdAntialias===undefined?!!HEAP8[attributes+3>>>0]:window.__gdAntialias",
+          find: '"antialias": !!HEAP8[attributes + 3 >>> 0],',
+          replace: '"antialias": window.__gdAntialias === undefined ? !!HEAP8[attributes + 3 >>> 0] : window.__gdAntialias,',
         },
       );
 
@@ -6359,10 +6377,10 @@
       }
       const audioRate = "*(Module.__gdAudioSpeed||1)";
       loader.gluePatches.push(
-        { name: "Eclipse audio speed position", find: "var t=(ctx.currentTime-ch.when)*ch.pitch*1e3+ch.base;", replace: "var t=(ctx.currentTime-ch.when)*ch.pitch" + audioRate + "*1e3+ch.base;" },
-        { name: "Eclipse audio speed start", find: "src.loop=!!ch.loop;src.playbackRate.value=ch.pitch;", replace: "src.loop=!!ch.loop;src.playbackRate.value=ch.pitch" + audioRate + ";" },
-        { name: "Eclipse audio speed seek", find: "src2.loop=!!c.loop;src2.playbackRate.value=c.pitch;", replace: "src2.loop=!!c.loop;src2.playbackRate.value=c.pitch" + audioRate + ";" },
-        { name: "Eclipse audio speed pitch", find: "c.pitch=f;if(c.src)c.src.playbackRate.value=f}", replace: "c.pitch=f;if(c.src)c.src.playbackRate.value=f" + audioRate + "}" },
+        { name: "Eclipse audio speed position", find: "var t = (ctx.currentTime - ch.when) * ch.pitch * 1e3 + ch.base;", replace: "var t = (ctx.currentTime - ch.when) * ch.pitch" + audioRate + " * 1e3 + ch.base;" },
+        { name: "Eclipse audio speed start", find: "src.loop = !!ch.loop;\n          src.playbackRate.value = ch.pitch;", replace: "src.loop = !!ch.loop;\n          src.playbackRate.value = ch.pitch" + audioRate + ";" },
+        { name: "Eclipse audio speed seek", find: "src2.loop = !!c.loop;\n          src2.playbackRate.value = c.pitch;", replace: "src2.loop = !!c.loop;\n          src2.playbackRate.value = c.pitch" + audioRate + ";" },
+        { name: "Eclipse audio speed pitch", find: "c.pitch = f;\n          if (c.src) c.src.playbackRate.value = f;", replace: "c.pitch = f;\n          if (c.src) c.src.playbackRate.value = f" + audioRate + ";" },
       );
 
       // Pitch shift without changing speed: two crossfaded delay lines whose
