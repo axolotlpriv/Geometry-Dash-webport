@@ -1587,31 +1587,49 @@
           this.regs = cpuView(cpu);
           this.handled = false;
           this.index = 0;
+          this.saved = null;
+        }
+        // The arguments as the original function got them. Once it has run,
+        // the argument registers hold whatever it left there, so they are
+        // kept from just before it ran.
+        saveArgs() {
+          const regs = this.regs;
+          this.saved = {
+            ints: INT_ARG_REGS.map((reg) => regs.getBig(reg)),
+            f32: [0, 1, 2, 3].map((i) => regs.xmmF32(i)),
+            f64: [0, 1, 2, 3].map((i) => regs.xmmF64(i)),
+            rsp: regs.getBig("rsp"),
+          };
+        }
+        intReg(i) {
+          return this.saved ? this.saved.ints[i] : this.regs.getBig(INT_ARG_REGS[i]);
+        }
+        rsp() {
+          return this.saved ? this.saved.rsp : this.regs.getBig("rsp");
         }
         // Integer/pointer argument by position (0 is `this` for methods).
         arg(i) {
-          return i < 4
-            ? this.regs.get(INT_ARG_REGS[i])
-            : mem.ptr(this.regs.getBig("rsp") + BigInt(8 * (i + 1)));
+          return i < 4 ? Number(this.intReg(i)) : mem.ptr(this.rsp() + BigInt(8 * (i + 1)));
         }
         int(i) {
           return i < 4
-            ? Number(BigInt.asIntN(32, this.regs.getBig(INT_ARG_REGS[i])))
-            : mem.i32(this.regs.getBig("rsp") + BigInt(8 * (i + 1)));
+            ? Number(BigInt.asIntN(32, this.intReg(i)))
+            : mem.i32(this.rsp() + BigInt(8 * (i + 1)));
         }
         setArg(i, v) {
           if (i < 4) this.regs.set(INT_ARG_REGS[i], v);
           else mem.setPtr(this.regs.getBig("rsp") + BigInt(8 * (i + 1)), v);
         }
         float(i) {
-          return i < 4 ? this.regs.xmmF32(i) : mem.f32(this.regs.getBig("rsp") + BigInt(8 * (i + 1)));
+          if (i < 4) return this.saved ? this.saved.f32[i] : this.regs.xmmF32(i);
+          return mem.f32(this.rsp() + BigInt(8 * (i + 1)));
         }
         setFloat(i, v) {
           if (i < 4) this.regs.setXmmF32(i, v);
           else mem.setF32(this.regs.getBig("rsp") + BigInt(8 * (i + 1)), v);
         }
         double(i) {
-          return this.regs.xmmF64(i);
+          return this.saved ? this.saved.f64[i] : this.regs.xmmF64(i);
         }
         // Return right away without running the game's function.
         // Return right away (like the function's `ret`) without running it.
@@ -1634,6 +1652,7 @@
           if (this.handled) return this.result();
           if (!runHandlers(this, this.index + 1)) {
             this.entry.bypass = true;
+            if (!this.saved) this.saveArgs();
             if (profile) {
               const started = performance.now();
               runLifted(this.entry.slot, this.cpu);
