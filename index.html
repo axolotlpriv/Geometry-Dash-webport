@@ -1060,8 +1060,9 @@
     // functions are patched to start with `if (hook(cpu, id)) return;`, so a
     // JS handler can read and change the arguments, skip the function, or run
     // it and then look at the result. Function addresses are the Windows
-    // 2.2081 addresses from Geode's bindings (image base 0x140000000), rebased
-    // to where the port loads the game.
+    // 2.2091 addresses from Geode's bindings (image base 0x140000000), rebased
+    // to where the port loads the game, each checked against the code of its
+    // 2.2081 counterpart.
     const GDModLoader = (window.GDModLoader = (function () {
       const REG = {
           rip: 192,
@@ -1080,321 +1081,329 @@
         modsById = new Map(),
         pendingTasks = [],
         listeners = new Set(),
-        // Generated from Geode's 2.2081 bindings and libcocos2d's exports.
+        // Generated from Geode's 2.2091 bindings and libcocos2d's exports.
         addresses = {
-          "cocos2d::CCScheduler::update": 0x100c2b60,
-          "cocos2d::CCDirector::sharedDirector": 0x100bfcc0,
-          "cocos2d::CCDirector::getWinSize": 0x100be710,
-          "cocos2d::CCMenu::create": 0x100592b0,
-          "cocos2d::CCMenu::addChild": 0x10057fa0,
-          "cocos2d::CCNode::addChild": 0x10002bc0,
-          "cocos2d::CCNode::setPosition": 0x10004d70,
-          "cocos2d::CCNode::setScale": 0x10004ed0,
-          "cocos2d::CCNode::setVisible": 0x10005100,
-          "MenuLayer::init": 0x733a90,
-          "MenuLayer::onMoreGames": 0x735740,
-          "ButtonSprite::create": 0x43f1c0,
-          "CCMenuItemSpriteExtra::create": 0x444bb0,
-          "PlayLayer::delayedResetLevel": 0x7b8cf0,
-          "cocos2d::CCTransitionFade::create": 0x10052dd0,
-          "cocos2d::CCDrawNode::vtable": 0x100e6710,
-          "GJBaseGameLayer::update": 0x637850,
-          "GJBaseGameLayer::toggleFlipped": 0x6467d0,
-          "PlayLayer::destroyPlayer": 0x7b39d0,
-          "PlayLayer::updateProgressbar": 0x7b23c0,
-          "PlayLayer::getCurrentPercent": 0x7b3950,
-          "PlayLayer::resetLevel": 0x7b8eb0,
-          "PlayLayer::onQuit": 0x7babb0,
-          "PlayerObject::playDeathEffect": 0x77ef10,
-          "GameManager::isIconUnlocked": 0x57c500,
-          "GameManager::isColorUnlocked": 0x57c8e0,
-          "GameStatsManager::isItemUnlocked": 0x5e5820,
-          "GJGameLevel::savePercentage": 0x56c8b0,
-          "GameStatsManager::completedLevel": 0x5de3b0,
-          "GameStatsManager::awardCurrencyForLevel": 0x5e0960,
-          "GameStatsManager::awardDiamondsForLevel": 0x5e1140,
-          "GameStatsManager::completedDailyLevel": 0x5e2de0,
-          "GameStatsManager::completedMapPack": 0x5dee00,
-          "GameStatsManager::storeUserCoin": 0x5dfda0,
-          "GameStatsManager::storeSecretCoin": 0x5dfff0,
-          "GameStatsManager::setStarsForMapPack": 0x5df060,
-          "GameStatsManager::awardSecretKey": 0x5f19f0,
-          "GJBaseGameLayer::updateDebugDraw": 0x610800,
-          "MusicDownloadManager::isSongDownloaded": 0x73f250,
-          "LevelTools::getAudioFileName": 0x728470,
-          "LevelTools::getAudioTitle": 0x7278f0,
-          "GJBaseGameLayer::shakeCamera": 0x63bc50,
-          "cocos2d::CCTextFieldTTF::attachWithIME": 0x100b5140,
-          "cocos2d::CCTextFieldTTF::detachWithIME": 0x100b5540,
-          "GameManager::sharedState": 0x57b4a0,
-          "GameManager::activeIconForType": 0x581a90,
-          "GJGameLevel::getCoinKey": 0x56cda0,
-          "PlayLayer::init": 0x7a5b00,
-          "PlayerObject::create": 0x7866d0,
-          "PlayerObject::setColor": 0x79d310,
-          "PlayerObject::setSecondColor": 0x79d3a0,
-          "PlayerObject::setOpacity": 0x79daf0,
-          "PlayerObject::resetObject": 0x796ee0,
-          "PlayerObject::toggleFlyMode": 0x79a4f0,
-          "PlayerObject::toggleRollMode": 0x79b570,
-          "PlayerObject::toggleBirdMode": 0x79a820,
-          "PlayerObject::toggleDartMode": 0x79af90,
-          "PlayerObject::toggleRobotMode": 0x79b6f0,
-          "PlayerObject::toggleSpiderMode": 0x79ba70,
-          "PlayerObject::toggleSwingMode": 0x79ab20,
-          "PlayerObject::flipGravity": 0x79a1d0,
-          "PlayerObject::togglePlayerScale": 0x7a0700,
-          "PlayerObject::playerDestroyed": 0x797d40,
-          "PlayerObject::updateGlowColor": 0x79d430,
-          "PlayerObject::updatePlayerFrame": 0x79dc50,
-          "PlayerObject::updatePlayerShipFrame": 0x79de80,
-          "PlayerObject::updatePlayerRollFrame": 0x79e580,
-          "PlayerObject::updatePlayerBirdFrame": 0x79e2e0,
-          "PlayerObject::updatePlayerDartFrame": 0x79e9e0,
-          "PlayerObject::updatePlayerSwingFrame": 0x79e7b0,
-          "PlayerObject::updatePlayerJetpackFrame": 0x79e0b0,
-          "cocos2d::CCNode::getParent": 0x100034c0,
-          "cocos2d::CCNode::getPosition": 0x100034d0,
-          "cocos2d::CCNode::getRotation": 0x10003510,
-          "cocos2d::CCNode::setRotation": 0x10004e50,
-          "cocos2d::CCNode::removeFromParentAndCleanup": 0x10004760,
-          "cocos2d::CCLabelBMFont::create": 0x10047b20,
-          "cocos2d::CCNode::setAnchorPoint": 0x10004aa0,
-          "cocos2d::CCNode::setContentSize": 0x10004bf0,
-          "cocos2d::CCNode::getContentSize": 0x10003450,
-          "cocos2d::CCNode::setScaleX": 0x10004f10,
-          "cocos2d::CCNode::setScaleY": 0x10004f30,
-          "cocos2d::CCNode::getScale": 0x10003530,
-          "cocos2d::CCNode::setZOrder": 0x10005110,
-          "cocos2d::CCNode::removeAllChildrenWithCleanup": 0x100045d0,
-          "cocos2d::CCNode::getChildren": 0x100033d0,
-          "cocos2d::CCNode::isRunning": 0x10003740,
-          "cocos2d::CCNode::runAction": 0x10004820,
-          "cocos2d::CCNode::stopAllActions": 0x100052c0,
-          "cocos2d::CCNode::isVisible": 0x10003750,
-          "cocos2d::CCNode::convertToWorldSpace": 0x10002f60,
-          "cocos2d::CCObject::retain": 0x1000eae0,
-          "cocos2d::CCObject::release": 0x1000eac0,
-          "cocos2d::CCObject::autorelease": 0x1000ea40,
-          "cocos2d::CCArray::count": 0x100069c0,
-          "cocos2d::CCArray::objectAtIndex": 0x10007140,
-          "cocos2d::CCSprite::create": 0x1008b4d0,
-          "cocos2d::CCSprite::createWithSpriteFrameName": 0x1008b6c0,
-          "cocos2d::CCSprite::setFlipX": 0x1008c550,
-          "cocos2d::CCSprite::setOpacity": 0x1008c5b0,
-          "cocos2d::CCSprite::setColor": 0x1008c3b0,
-          "cocos2d::CCLabelBMFont::setString": 0x1004ca00,
-          "cocos2d::CCLabelBMFont::limitLabelWidth": 0x10048e60,
-          "cocos2d::CCLabelBMFont::setOpacity": 0x1004c690,
-          "cocos2d::CCLabelBMFont::setColor": 0x1004c470,
-          "cocos2d::CCLayer::create": 0x1004f700,
-          "cocos2d::CCLayerColor::create": 0x1004f7e0,
-          "cocos2d::CCLayerColor::setOpacity": 0x10050dc0,
-          "cocos2d::CCLayerColor::setColor": 0x10050a70,
-          "cocos2d::CCScene::create": 0x10051b40,
-          "cocos2d::CCDirector::pushScene": 0x100bef90,
-          "cocos2d::CCDirector::replaceScene": 0x100bf130,
-          "cocos2d::CCDirector::popSceneWithTransition": 0x100bebf0,
-          "cocos2d::CCDirector::getRunningScene": 0x100032d0,
-          "cocos2d::CCMenuItem::setEnabled": 0x1005b700,
-          "cocos2d::CCMenu::setHandlerPriority": 0x10059980,
-          "cocos2d::CCLayer::setTouchPriority": 0x10050f70,
-          "cocos2d::CCFadeTo::create": 0x10033a00,
-          "cocos2d::CCScaleTo::create": 0x100344b0,
-          "cocos2d::CCRepeatForever::create": 0x10033ee0,
-          "cocos2d::CCSequence::createWithTwoActions": 0x10034eb0,
-          "cocos2d::CCEaseSineInOut::create": 0x100298d0,
-          "cocos2d::CCRotateBy::create": 0x10034000,
-          "cocos2d::CCMoveBy::create": 0x10033cb0,
-          "cocos2d::CCTextFieldTTF::getString": 0x100b5670,
-          "cocos2d::extension::CCScale9Sprite::create": 0x1200f790,
-          "cocos2d::extension::CCScale9Sprite::setContentSize": 0x1200ee60,
-          "cocos2d::extension::CCScale9Sprite::setOpacity": 0x12010260,
-          "cocos2d::extension::CCScale9Sprite::setColor": 0x12010190,
-          "FLAlertLayer::create": 0x4519b0,
-          "FLAlertLayer::show": 0x452c00,
-          "FLAlertLayer::keyBackClicked": 0x4528f0,
-          "CCMenuItemToggler::create": 0x445250,
-          "CCMenuItemToggler::toggle": 0x445630,
-          "CCMenuItemToggler::setSizeMult": 0x445480,
-          "CCTextInputNode::create": 0x44f160,
-          "CCTextInputNode::setString": 0x44f810,
-          "CCScrollLayerExt::ctor": 0x446ac0,
-          "CCScrollLayerExt::moveToTop": 0x447070,
-          "CCScrollLayerExt::constraintContent": 0x447170,
-          "SimplePlayer::create": 0x6793a0,
-          "SimplePlayer::updatePlayerFrame": 0x67a090,
-          "SimplePlayer::setColor": 0x679c00,
-          "SimplePlayer::updateColors": 0x679cd0,
-          "GameManager::colorForIdx": 0x581350,
-          "LoadingCircle::create": 0x46b870,
-          "LoadingCircle::show": 0x46ba50,
-          "LoadingCircle::fadeAndRemove": 0x46bb50,
-          "TextAlertPopup::create": 0x69db00,
-          "ButtonSprite::setString": 0x43fb50,
-          "ButtonSprite::updateBGImage": 0x43f590,
-          "GJAccountManager::sharedState": 0x5fffd0,
-          "cocos2d::CCNode::create": 0x10003120,
-          "CCTextInputNode::refreshLabel": 0x44fbb0,
-          "cocos2d::CCDirector::getTouchDispatcher": 0x100be680,
-          "cocos2d::CCTouchDispatcher::findHandler": 0x100b2c80,
-          "cocos2d::CCTouchDispatcher::setPriority": 0x100b31c0,
-          "cocos2d::CCTouchHandler::getPriority": 0x100a5270,
-          "cocos2d::CCLayer::touchVtable": 0x100ed2f0,
-          "CCTextInputNode::ccTouchBegan": 0x451330,
-          "CCTextInputNode::onClickTrackNode": 0x450460,
-          "cocos2d::CCTouch::getLocation": 0x100b2770,
-          "cocos2d::CCNode::convertToNodeSpace": 0x10002e20,
-          "cocos2d::CCDirector::getContentScaleFactor": 0x100be600,
-          "TextArea::create": 0x476e80,
-          "Slider::create": 0x471750,
-          "Slider::setValue": 0x471c30,
-          "SliderThumb::getValue": 0x4712e0,
-          "cocos2d::CCMenuItemSprite::setNormalImage": 0x1005b9f0,
-          "cocos2d::extension::CCScale9Sprite::createWithSpriteFrameName": 0x1200fb50,
-          "cocos2d::CCSprite::setFlipY": 0x1008c580,
-          "LevelTools::getLevel": 0x725040,
-          "PlayLayer::scene": 0x7a5a50,
-          "GameLevelManager::sharedState": 0x542d10,
-          "GameLevelManager::getSavedLevel(int)": 0x548b10,
-          "cocos2d::CCDirector::popScene": 0x100beb70,
-          "PauseLayer::customSetup": 0x77c870,
-          "cocos2d::CCEaseExponentialOut::create": 0x10029430,
-          "cocos2d::CCEaseExponentialIn::create": 0x100292d0,
-          "cocos2d::CCEaseBounceOut::create": 0x10028ea0,
-          "cocos2d::CCDelayTime::create": 0x10033820,
-          "cocos2d::CCSpawn::createWithTwoActions": 0x10034f80,
-          "PauseLayer::onResume": 0x77e380,
-          "cocos2d::CCSprite::createEmpty": 0x1008b5e0,
-          "FMODLevelVisualizer::create": 0x69e7b0,
-          "FMODLevelVisualizer::updateVisualizer": 0x69ecf0,
-          "PlayLayer::pauseGame": 0x7ba0e0,
-          "PlayLayer::resume": 0x7ba640,
-          "PlayLayer::resumeAndRestart": 0x7ba3c0,
-          "PlayLayer::togglePracticeMode": 0x7b9e50,
-          "LevelCell::loadFromLevel": 0x4ae050,
-          "GJBaseGameLayer::checkCollisions": 0x6137f0,
-          "GJBaseGameLayer::handleButton": 0x6338e0,
-          "PlayerObject::collidedWithObject": 0x7919b0,
-          "cocos2d::CCEGLView::sharedOpenGLView": 0x10078c90,
-          "cocos2d::CCEGLView::setFrameSize": 0x10078860,
-          "cocos2d::CCEGLViewProtocol::setDesignResolutionSize": 0x1006bea0,
-          "cocos2d::CCEGLViewProtocol::getDesignResolutionSize": 0x1006b5f0,
-          "cocos2d::CCEGLViewProtocol::getFrameSize": 0x1006b600,
-          "PlayLayer::addObject": 0x7add70,
-          "GJBaseGameLayer::triggerShaderCommand": 0x621030,
-          "GameObject::addGlow": 0x58dee0,
-          "GameObject::addEmptyGlow": 0x58e660,
-          "LevelEditorLayer::create": 0x6d1d40,
-          "PlayLayer::removeAllCheckpoints": 0x7b8040,
-          "GameObject::createWithKey": 0x58b7d0,
-          "PlayLayer::onExit": 0x7bafc0,
-          "PlayLayer::levelComplete": 0x7a7a80,
-          "EditorPauseLayer::onExitEditor": 0x4de2a0,
-          "EditorPauseLayer::onExitNoSave": 0x4de370,
-          "EditorPauseLayer::onSaveAndExit": 0x4de260,
-          "GJBaseGameLayer::getModifiedDelta": 0x6377b0,
-          "GameStatsManager::incrementStat": 0x5d44d0,
-          "GameManager::getGameVariable": 0x583110,
-          "GameToolbox::intToShortString": 0x469150,
-          "cocos2d::CCLayerColor::initWithColor": 0x100500f0,
-          "PlayLayer::postUpdate": 0x7b4ba0,
-          "PlayerObject::toggleGhostEffect": 0x79ee30,
-          "PlayerObject::toggleVisibility": 0x78b440,
-          "PlayerObject::animatePlatformerJump": 0x78cc80,
-          "PlayerObject::playSpiderDashEffect": 0x795170,
-          "PlayerObject::activateStreak": 0x7a0090,
-          "PlayerObject::playSpawnEffect": 0x797480,
-          "PlayerObject::setRotation": 0x7a3840,
-          "PlayerObject::createFadeOutDartStreak": 0x798660,
-          "PlayerObject::setPosition": 0x79c640,
-          "GJBaseGameLayer::updateColor": 0x623970,
-          "GJBaseGameLayer::hasUniqueCoin": 0x616700,
-          "GJBaseGameLayer::pickupItem": 0x6161b0,
-          "GJBaseGameLayer::destroyObject": 0x616090,
-          "GJBaseGameLayer::loadLevelSettings": 0x63ad00,
-          "UILayer::togglePlatformerMode": 0x8cd610,
-          "cocos2d::CCLabelBMFont::setFntFile": 0x1004c560,
-          "PauseLayer::onRestart": 0x77e410,
-          "PauseLayer::onRestartFull": 0x77e4b0,
-          "PauseLayer::onPracticeMode": 0x77e1c0,
-          "PauseLayer::onNormalMode": 0x77e2a0,
-          "UILayer::onPause": 0x8cdf50,
-          "UILayer::onCheck": 0x8ce060,
-          "PlayLayer::updateAttempts": 0x7b9ba0,
-          "PlayLayer::showCompleteEffect": 0x7a8f30,
-          "CCLightFlash::playEffect": 0x443410,
-          "GJBaseGameLayer::lightningFlash": 0x646d00,
-          "GameManager::playSFXTrigger": 0x57bcc0,
-          "FMODAudioEngine::fadeOutMusic": 0x45c530,
-          "cocos2d::CCParticleSystem::initParticle": 0x10065f60,
-          "GJBaseGameLayer::canBeActivatedByPlayer": 0x6178c0,
-          "GJBaseGameLayer::processCommands": 0x639c60,
-          "PlayerObject::tryPlaceCheckpoint": 0x7a32d0,
-          "PlayLayer::storeCheckpoint": 0x7b74a0,
-          "cocos2d::CCMotionStreak::initWithFade": 0x1005ce90,
-          "LevelInfoLayer::init": 0x6f7340,
-          "CustomSongWidget::onDownload": 0x4cabc0,
-          "GameLevelManager::getMainLevel": 0x544450,
-          "OptionsLayer::musicSliderChanged": 0x772990,
-          "PauseLayer::musicSliderChanged": 0x77e130,
-          "OptionsLayer::sfxSliderChanged": 0x772a90,
-          "CCTextInputNode::updateLabel": 0x44f8b0,
-          "PlayLayer::removeCheckpoint": 0x7b7f00,
-          "ProfilePage::loadPageFromUserInfo": 0x7bfe80,
-          "CommentCell::loadFromComment": 0x4b5c00,
-          "GJBaseGameLayer::shouldExitHackedLevel": 0x60b050,
-          "LevelTools::verifyLevelIntegrity": 0x72d3c0,
-          "GameStatsManager::getStat": 0x5d51b0,
-          "GameManager::getUGV": 0x5834a0,
-          "CreatorLayer::onSecretVault": 0x49e590,
-          "CreatorLayer::onTreasureRoom": 0x49eda0,
-          "OptionsLayer::onSecretVault": 0x772cd0,
-          "LevelAreaInnerLayer::onDoor": 0x6c81d0,
-          "SecretLayer2::onDoor": 0x7e4910,
-          "LevelPage::addSecretDoor": 0x71cab0,
-          "GJGarageLayer::onShop": 0x678fd0,
-          "SecretRewardsLayer::onShop": 0x7d66d0,
-          "LevelInfoLayer::confirmClone": 0x6fd860,
-          "RewardUnlockLayer::init": 0x7cddf0,
-          "RewardUnlockLayer::onClose": 0x7d1590,
-          "RewardUnlockLayer::currencyWillExit": 0x7d1580,
-          "EditLevelLayer::onShare": 0x4d8450,
-          "MenuGameLayer::update": 0x732240,
-          "MenuGameLayer::tryJump": 0x731f70,
-          "PlayerObject::pushButton": 0x797f40,
-          "PlayerObject::releaseButton": 0x7981d0,
-          "EditorUI::constrainGameLayerPosition": 0x522980,
-          "EditorUI::init": 0x4df390,
-          "LevelEditorLayer::onPlaytest": 0x6dfcd0,
-          "LevelEditorLayer::onStopPlaytest": 0x6e0630,
-          "LevelEditorLayer::postUpdate": 0x6e0f40,
-          "PauseLayer::onTryEdit": 0x77e550,
-          "EditorPauseLayer::saveLevel": 0x4dd840,
-          "MenuLayer::onOptions": 0x735a70,
-          "GameStatsManager::sharedState": 0x5d0ef0,
-          "GameStatsManager::uncompleteLevel": 0x5deb90,
-          "VideoOptionsLayer::create": 0x776a40,
-          "GameStatsManager::hasSecretCoin": 0x5dff20,
-          "GameStatsManager::setStat": 0x5d52d0,
-          "cocos2d::CCDrawNode::drawPolygon": 0x10013190,
-          "cocos2d::CCDrawNode::drawCircle": 0x100122c0,
-          "cocos2d::CCDrawNode::drawSegment": 0x10014490,
-          "cocos2d::CCDrawNode::clear": 0x10011fe0,
-          "PlayLayer::resetLevelFromStart": 0x7b8d10,
-          "GJBaseGameLayer::processQueuedButtons": 0x631d10,
-          "PlayLayer::loadFromCheckpoint": 0x7b7640,
-          "PlayerObject::copyAttributes": 0x7a04a0,
-          "PlayerObject::update": 0x788d80,
-          "GJBaseGameLayer::playerTouchedRing": 0x617e40,
-          "FMODAudioEngine::playEffect": 0x456e40,
-          "cocos2d::CCDrawNode::create": 0x10012000,
-          "PlayerObject::updateMove": 0x78a0c0,
-          "PlayerObject::updateJump": 0x78b900,
-          "PlayerObject::postCollision": 0x78d580,
-          "PlayerObject::updateRotation(float)": 0x791020,
-          "cocos2d::CCDrawNode::drawDot": 0x10012ca0,
+          "cocos2d::CCScheduler::update": 0x100c6480,
+          "cocos2d::CCDirector::sharedDirector": 0x100c3500,
+          "cocos2d::CCDirector::getWinSize": 0x100c1f20,
+          "cocos2d::CCMenu::create": 0x1005b2a0,
+          "cocos2d::CCMenu::addChild": 0x10059f10,
+          "cocos2d::CCNode::addChild": 0x10002b90,
+          "cocos2d::CCNode::setPosition": 0x10004e60,
+          "cocos2d::CCNode::setScale": 0x10004fc0,
+          "cocos2d::CCNode::setVisible": 0x100051f0,
+          "MenuLayer::init": 0x8720c0,
+          "MenuLayer::onFacebook": 0x874390,
+          "ButtonSprite::create": 0x442be0,
+          "CCMenuItemSpriteExtra::create": 0x4488a0,
+          "PlayLayer::delayedResetLevel": 0x918a30,
+          "cocos2d::CCTransitionFade::create": 0x10054b80,
+          "cocos2d::CCDrawNode::vtable": 0x100ec758,
+          "GJBaseGameLayer::update": 0x7406d0,
+          "GJBaseGameLayer::toggleFlipped": 0x750b00,
+          "PlayLayer::destroyPlayer": 0x912390,
+          "PlayLayer::updateProgressbar": 0x910e50,
+          "PlayLayer::getCurrentPercent": 0x912300,
+          "PlayLayer::resetLevel": 0x918c00,
+          "PlayLayer::onQuit": 0x91b0b0,
+          "PlayerObject::playDeathEffect": 0x8dd160,
+          "GameManager::isIconUnlocked": 0x6773d0,
+          "GameManager::isColorUnlocked": 0x6777a0,
+          "GameStatsManager::isItemUnlocked": 0x6e9470,
+          "GJGameLevel::savePercentage": 0x6641b0,
+          "GameStatsManager::completedLevel": 0x6e1c00,
+          "GameStatsManager::awardCurrencyForLevel": 0x6e4380,
+          "GameStatsManager::awardDiamondsForLevel": 0x6e4b40,
+          "GameStatsManager::completedDailyLevel": 0x6e69d0,
+          "GameStatsManager::completedMapPack": 0x6e26f0,
+          "GameStatsManager::storeUserCoin": 0x6e3700,
+          "GameStatsManager::storeSecretCoin": 0x6e3980,
+          "GameStatsManager::setStarsForMapPack": 0x6e2970,
+          "GameStatsManager::awardSecretKey": 0x6f65e0,
+          "GJBaseGameLayer::updateDebugDraw": 0x7169c0,
+          "MusicDownloadManager::isSongDownloaded": 0x8845a0,
+          "LevelTools::getAudioFileName": 0x8633d0,
+          "LevelTools::getAudioTitle": 0x862870,
+          "GJBaseGameLayer::shakeCamera": 0x745bc0,
+          "cocos2d::CCTextFieldTTF::attachWithIME": 0x100b8e90,
+          "cocos2d::CCTextFieldTTF::detachWithIME": 0x100b9200,
+          "GameManager::sharedState": 0x6762c0,
+          "GameManager::activeIconForType": 0x67cea0,
+          "GJGameLevel::getCoinKey": 0x664610,
+          "PlayLayer::init": 0x9039e0,
+          "PlayerObject::create": 0x8e4940,
+          "PlayerObject::setColor": 0x8fb630,
+          "PlayerObject::setSecondColor": 0x8fb6c0,
+          "PlayerObject::setOpacity": 0x8fbe40,
+          "PlayerObject::resetObject": 0x8f5110,
+          "PlayerObject::toggleFlyMode": 0x8f8790,
+          "PlayerObject::toggleRollMode": 0x8f9840,
+          "PlayerObject::toggleBirdMode": 0x8f8ad0,
+          "PlayerObject::toggleDartMode": 0x8f9230,
+          "PlayerObject::toggleRobotMode": 0x8f99d0,
+          "PlayerObject::toggleSpiderMode": 0x8f9d80,
+          "PlayerObject::toggleSwingMode": 0x8f8dd0,
+          "PlayerObject::flipGravity": 0x8f8440,
+          "PlayerObject::togglePlayerScale": 0x8fecb0,
+          "PlayerObject::playerDestroyed": 0x8f5ff0,
+          "PlayerObject::updateGlowColor": 0x8fb750,
+          "PlayerObject::updatePlayerFrame": 0x8fbfa0,
+          "PlayerObject::updatePlayerShipFrame": 0x8fc1e0,
+          "PlayerObject::updatePlayerRollFrame": 0x8fc8f0,
+          "PlayerObject::updatePlayerBirdFrame": 0x8fc640,
+          "PlayerObject::updatePlayerDartFrame": 0x8fcd50,
+          "PlayerObject::updatePlayerSwingFrame": 0x8fcb20,
+          "PlayerObject::updatePlayerJetpackFrame": 0x8fc410,
+          "cocos2d::CCNode::getParent": 0x10003540,
+          "cocos2d::CCNode::getPosition": 0x10003550,
+          "cocos2d::CCNode::getRotation": 0x10003590,
+          "cocos2d::CCNode::setRotation": 0x10004f40,
+          "cocos2d::CCNode::removeFromParentAndCleanup": 0x10004840,
+          "cocos2d::CCLabelBMFont::create": 0x10049150,
+          "cocos2d::CCNode::setAnchorPoint": 0x10004b80,
+          "cocos2d::CCNode::setContentSize": 0x10004ce0,
+          "cocos2d::CCNode::getContentSize": 0x100034d0,
+          "cocos2d::CCNode::setScaleX": 0x10005000,
+          "cocos2d::CCNode::setScaleY": 0x10005020,
+          "cocos2d::CCNode::getScale": 0x100035b0,
+          "cocos2d::CCNode::setZOrder": 0x10005200,
+          "cocos2d::CCNode::removeAllChildrenWithCleanup": 0x100046a0,
+          "cocos2d::CCNode::getChildren": 0x10003450,
+          "cocos2d::CCNode::isRunning": 0x100037c0,
+          "cocos2d::CCNode::runAction": 0x10004900,
+          "cocos2d::CCNode::stopAllActions": 0x100053c0,
+          "cocos2d::CCNode::isVisible": 0x100037d0,
+          "cocos2d::CCNode::convertToWorldSpace": 0x10002fd0,
+          "cocos2d::CCObject::retain": 0x1000ebd0,
+          "cocos2d::CCObject::release": 0x1000ebb0,
+          "cocos2d::CCObject::autorelease": 0x1000eb30,
+          "cocos2d::CCArray::count": 0x10006b00,
+          "cocos2d::CCArray::objectAtIndex": 0x10007290,
+          "cocos2d::CCSprite::create": 0x1008e670,
+          "cocos2d::CCSprite::createWithSpriteFrameName": 0x1008e860,
+          "cocos2d::CCSprite::setFlipX": 0x1008f740,
+          "cocos2d::CCSprite::setOpacity": 0x1008f7a0,
+          "cocos2d::CCSprite::setColor": 0x1008f5a0,
+          "cocos2d::CCLabelBMFont::setString": 0x1004e500,
+          "cocos2d::CCLabelBMFont::limitLabelWidth": 0x1004a470,
+          "cocos2d::CCLabelBMFont::setOpacity": 0x1004e250,
+          "cocos2d::CCLabelBMFont::setColor": 0x1004e040,
+          "cocos2d::CCLayer::create": 0x10051520,
+          "cocos2d::CCLayerColor::create": 0x10051600,
+          "cocos2d::CCLayerColor::setOpacity": 0x10052be0,
+          "cocos2d::CCLayerColor::setColor": 0x10052890,
+          "cocos2d::CCScene::create": 0x100538c0,
+          "cocos2d::CCDirector::pushScene": 0x100c27e0,
+          "cocos2d::CCDirector::replaceScene": 0x100c2980,
+          "cocos2d::CCDirector::popSceneWithTransition": 0x100c2440,
+          "cocos2d::CCMenuItem::setEnabled": 0x1005d730,
+          "cocos2d::CCMenu::setHandlerPriority": 0x1005b9c0,
+          "cocos2d::CCLayer::setTouchPriority": 0x10052da0,
+          "cocos2d::CCFadeTo::create": 0x10034080,
+          "cocos2d::CCScaleTo::create": 0x10034b30,
+          "cocos2d::CCRepeatForever::create": 0x10034560,
+          "cocos2d::CCSequence::createWithTwoActions": 0x10035500,
+          "cocos2d::CCEaseSineInOut::create": 0x10029fe0,
+          "cocos2d::CCRotateBy::create": 0x10034680,
+          "cocos2d::CCMoveBy::create": 0x10034330,
+          "cocos2d::CCTextFieldTTF::getString": 0x100b9330,
+          "cocos2d::extension::CCScale9Sprite::create": 0x1200f250,
+          "cocos2d::extension::CCScale9Sprite::setContentSize": 0x1200e950,
+          "cocos2d::extension::CCScale9Sprite::setOpacity": 0x1200fd70,
+          "cocos2d::extension::CCScale9Sprite::setColor": 0x1200fca0,
+          "FLAlertLayer::create": 0x45a610,
+          "FLAlertLayer::show": 0x45b8a0,
+          "FLAlertLayer::keyBackClicked": 0x45b550,
+          "CCMenuItemToggler::create": 0x448f70,
+          "CCMenuItemToggler::toggle": 0x449320,
+          "CCMenuItemToggler::setSizeMult": 0x4491a0,
+          "CCTextInputNode::create": 0x454260,
+          "CCTextInputNode::setString": 0x454ea0,
+          "CCTextInputNode::setAllowedChars": 0x454d20,
+          "CCScrollLayerExt::ctor": 0x44a880,
+          "CCScrollLayerExt::moveToTop": 0x44ae30,
+          "CCScrollLayerExt::constraintContent": 0x44af70,
+          "SimplePlayer::create": 0x781d40,
+          "SimplePlayer::updatePlayerFrame": 0x782a80,
+          "SimplePlayer::setColor": 0x782600,
+          "SimplePlayer::updateColors": 0x7826d0,
+          "GameManager::colorForIdx": 0x67c5b0,
+          "LoadingCircle::create": 0x478790,
+          "LoadingCircle::show": 0x478970,
+          "LoadingCircle::fadeAndRemove": 0x478a80,
+          "TextAlertPopup::create": 0x7a8760,
+          "ButtonSprite::setString": 0x443550,
+          "ButtonSprite::updateBGImage": 0x442fc0,
+          "GJAccountManager::sharedState": 0x705170,
+          "cocos2d::CCNode::create": 0x100031a0,
+          "CCTextInputNode::refreshLabel": 0x4565a0,
+          "cocos2d::CCDirector::getTouchDispatcher": 0x100c1e90,
+          "cocos2d::CCTouchDispatcher::findHandler": 0x100b66e0,
+          "cocos2d::CCTouchDispatcher::setPriority": 0x100b6e30,
+          "cocos2d::CCTouchHandler::getPriority": 0x100a8d70,
+          "cocos2d::CCLayer::touchVtable": 0x100f3450,
+          "CCTextInputNode::ccTouchBegan": 0x458bd0,
+          "CCTextInputNode::onClickTrackNode": 0x4570f0,
+          "cocos2d::CCTouch::getLocation": 0x100b60e0,
+          "cocos2d::CCNode::convertToNodeSpace": 0x10002e90,
+          "cocos2d::CCDirector::getContentScaleFactor": 0x1005e300,
+          "TextArea::create": 0x489e30,
+          "Slider::create": 0x484700,
+          "Slider::setValue": 0x4849b0,
+          "SliderThumb::getValue": 0x483f90,
+          "cocos2d::CCMenuItemSprite::setNormalImage": 0x1005da20,
+          "cocos2d::extension::CCScale9Sprite::createWithSpriteFrameName": 0x1200f630,
+          "cocos2d::CCSprite::setFlipY": 0x1008f770,
+          "LevelTools::getLevel": 0x85ffe0,
+          "PlayLayer::scene": 0x903930,
+          "GameLevelManager::getSavedLevel(int)": 0x620700,
+          "cocos2d::CCDirector::popScene": 0x100c23c0,
+          "PauseLayer::customSetup": 0x8d68e0,
+          "cocos2d::CCEaseExponentialOut::create": 0x10029b40,
+          "cocos2d::CCEaseExponentialIn::create": 0x100299e0,
+          "cocos2d::CCEaseBounceOut::create": 0x100295b0,
+          "cocos2d::CCDelayTime::create": 0x10033ea0,
+          "cocos2d::CCSpawn::createWithTwoActions": 0x100355d0,
+          "PauseLayer::onResume": 0x8dac50,
+          "cocos2d::CCSprite::createEmpty": 0x1008e780,
+          "FMODLevelVisualizer::create": 0x7a9af0,
+          "FMODLevelVisualizer::updateVisualizer": 0x7aa050,
+          "PlayLayer::pauseGame": 0x91a370,
+          "PlayLayer::resume": 0x91aa00,
+          "PlayLayer::resumeAndRestart": 0x91a750,
+          "PlayLayer::togglePracticeMode": 0x919ff0,
+          "LevelCell::loadFromLevel": 0x548a80,
+          "GJBaseGameLayer::checkCollisions": 0x71aae0,
+          "GJBaseGameLayer::handleButton": 0x73c5b0,
+          "PlayerObject::collidedWithObject": 0x8efc90,
+          "cocos2d::CCEGLView::sharedOpenGLView": 0x1007bab0,
+          "cocos2d::CCEGLView::setFrameSize": 0x1007b680,
+          "cocos2d::CCEGLViewProtocol::setDesignResolutionSize": 0x1006e0f0,
+          "cocos2d::CCEGLViewProtocol::getDesignResolutionSize": 0x1006d7b0,
+          "cocos2d::CCEGLViewProtocol::getFrameSize": 0x1006d7c0,
+          "PlayLayer::addObject": 0x90c690,
+          "GJBaseGameLayer::triggerShaderCommand": 0x728da0,
+          "GameObject::addGlow": 0x68b0d0,
+          "GameObject::addEmptyGlow": 0x68b880,
+          "LevelEditorLayer::create": 0x7ed850,
+          "PlayLayer::removeAllCheckpoints": 0x917210,
+          "GameObject::createWithKey": 0x688930,
+          "PlayLayer::onExit": 0x91b550,
+          "PlayLayer::levelComplete": 0x9061b0,
+          "EditorPauseLayer::onExitEditor": 0x582b90,
+          "EditorPauseLayer::onExitNoSave": 0x582c80,
+          "EditorPauseLayer::onSaveAndExit": 0x582b30,
+          "GJBaseGameLayer::getModifiedDelta": 0x740630,
+          "GameStatsManager::incrementStat": 0x6da460,
+          "GameManager::getGameVariable": 0x67e5c0,
+          "GameToolbox::intToShortString": 0x473ff0,
+          "cocos2d::CCLayerColor::initWithColor": 0x10051f10,
+          "PlayLayer::postUpdate": 0x913ca0,
+          "PlayerObject::toggleGhostEffect": 0x8fd180,
+          "PlayerObject::toggleVisibility": 0x8e9680,
+          "PlayerObject::animatePlatformerJump": 0x8eaf30,
+          "PlayerObject::playSpiderDashEffect": 0x8f3370,
+          "PlayerObject::activateStreak": 0x8fe4a0,
+          "PlayerObject::playSpawnEffect": 0x8f5710,
+          "PlayerObject::setRotation": 0x901e70,
+          "PlayerObject::createFadeOutDartStreak": 0x8f69a0,
+          "PlayerObject::setPosition": 0x8fa970,
+          "GJBaseGameLayer::updateColor": 0x72b610,
+          "GJBaseGameLayer::hasUniqueCoin": 0x71dc20,
+          "GJBaseGameLayer::pickupItem": 0x71d580,
+          "GJBaseGameLayer::destroyObject": 0x71d460,
+          "GJBaseGameLayer::loadLevelSettings": 0x744c60,
+          "UILayer::togglePlatformerMode": 0xa70fd0,
+          "cocos2d::CCLabelBMFont::setFntFile": 0x1004e140,
+          "PauseLayer::onRestart": 0x8dae30,
+          "PauseLayer::onRestartFull": 0x8daf60,
+          "PauseLayer::onPracticeMode": 0x8daac0,
+          "PauseLayer::onNormalMode": 0x8dab90,
+          "UILayer::onPause": 0xa72f30,
+          "UILayer::onCheck": 0xa73050,
+          "PlayLayer::updateAttempts": 0x919d30,
+          "PlayLayer::showCompleteEffect": 0x907800,
+          "CCLightFlash::playEffect": 0x4470c0,
+          "GJBaseGameLayer::lightningFlash": 0x751030,
+          "GameManager::playSFXTrigger": 0x676b50,
+          "FMODAudioEngine::fadeOutMusic": 0x4654a0,
+          "cocos2d::CCParticleSystem::initParticle": 0x10068210,
+          "GJBaseGameLayer::canBeActivatedByPlayer": 0x71ef50,
+          "GJBaseGameLayer::processCommands": 0x742870,
+          "PlayerObject::tryPlaceCheckpoint": 0x901880,
+          "PlayLayer::storeCheckpoint": 0x916510,
+          "cocos2d::CCMotionStreak::initWithFade": 0x1005eef0,
+          "LevelInfoLayer::init": 0x81be90,
+          "CustomSongWidget::onDownload": 0x56b890,
+          "GameLevelManager::getMainLevel": 0x61bba0,
+          "OptionsLayer::musicSliderChanged": 0x8cbb20,
+          "PauseLayer::musicSliderChanged": 0x5822f0,
+          "OptionsLayer::sfxSliderChanged": 0x582390,
+          "CCTextInputNode::updateLabel": 0x455d20,
+          "PlayLayer::removeCheckpoint": 0x9170d0,
+          "ProfilePage::loadPageFromUserInfo": 0x952b60,
+          "CommentCell::loadFromComment": 0x551ea0,
+          "GJBaseGameLayer::shouldExitHackedLevel": 0x711160,
+          "LevelTools::verifyLevelIntegrity": 0x867e80,
+          "GameStatsManager::getStat": 0x6db160,
+          "GameManager::getUGV": 0x67e9c0,
+          "CreatorLayer::onSecretVault": 0x5384a0,
+          "CreatorLayer::onTreasureRoom": 0x538cd0,
+          "OptionsLayer::onSecretVault": 0x8cbd30,
+          "LevelAreaInnerLayer::onDoor": 0x7e14f0,
+          "SecretLayer2::onDoor": 0x97a3e0,
+          "LevelPage::addSecretDoor": 0x846030,
+          "GJGarageLayer::onShop": 0x781940,
+          "SecretRewardsLayer::onShop": 0x96c130,
+          "LevelInfoLayer::confirmClone": 0x822bd0,
+          "RewardUnlockLayer::init": 0x9636c0,
+          "RewardUnlockLayer::onClose": 0x966f00,
+          "RewardUnlockLayer::currencyWillExit": 0x966ef0,
+          "EditLevelLayer::onShare": 0x57b9b0,
+          "MenuGameLayer::update": 0x870860,
+          "MenuGameLayer::tryJump": 0x870570,
+          "PlayerObject::pushButton": 0x8f6200,
+          "PlayerObject::releaseButton": 0x8f64c0,
+          "EditorUI::constrainGameLayerPosition": 0x5bf010,
+          "EditorUI::init": 0x5a9630,
+          "LevelEditorLayer::onPlaytest": 0x7fe7e0,
+          "LevelEditorLayer::onStopPlaytest": 0x7ffeb0,
+          "LevelEditorLayer::postUpdate": 0x8008c0,
+          "PauseLayer::onTryEdit": 0x8db090,
+          "LevelEditorLayer::saveLevel": 0x7ff1f0,
+          "MenuLayer::onOptions": 0x874c20,
+          "GameStatsManager::sharedState": 0x6d6890,
+          "GameStatsManager::uncompleteLevel": 0x6e2450,
+          "VideoOptionsLayer::create": 0x8cc770,
+          "GameStatsManager::hasSecretCoin": 0x6e38a0,
+          "GameStatsManager::setStat": 0x6db290,
+          "cocos2d::CCDrawNode::drawPolygon": 0x10013270,
+          "cocos2d::CCDrawNode::drawCircle": 0x100124a0,
+          "cocos2d::CCDrawNode::drawSegment": 0x100144b0,
+          "cocos2d::CCDrawNode::clear": 0x100121c0,
+          "PlayLayer::resetLevelFromStart": 0x918a50,
+          "GJBaseGameLayer::processQueuedButtons": 0x73a9a0,
+          "PlayLayer::loadFromCheckpoint": 0x916820,
+          "PlayerObject::copyAttributes": 0x8fea30,
+          "PlayerObject::update": 0x8e6fc0,
+          "GJBaseGameLayer::playerTouchedRing": 0x71f5a0,
+          "FMODAudioEngine::playEffect": 0x45fa00,
+          "cocos2d::CCDrawNode::create": 0x100121e0,
+          "PlayerObject::updateMove": 0x8e8310,
+          "PlayerObject::updateJump": 0x8e9b80,
+          "PlayerObject::postCollision": 0x8eb830,
+          "PlayerObject::updateRotation(float)": 0x8ef390,
+          "cocos2d::CCDrawNode::drawDot": 0x10012e60,
         };
+      // Functions 2.2091 has no callable copy of (inlined everywhere, or not
+      // lifted): they only read a pointer, so they're done here the way the
+      // game's own inlined copies do it.
+      const inlined = {
+        // The global every inlined GameLevelManager::sharedState() stores to.
+        "GameLevelManager::sharedState": () => mem.ptr(0xd0bfb0),
+        // CCDirector::m_pRunningScene (0x108 in 2.2081, 0x110 in 2.2091).
+        "cocos2d::CCDirector::getRunningScene": (director) => mem.ptr(Number(director) + 0x110),
+      };
       let instance = null,
         table = null,
         memory = null,
@@ -1487,6 +1496,10 @@
       // {point: [x, y]}, menu selectors as {selector: "Class::method"} and raw
       // structs as {bytes}; those are copied to the guest stack for the call.
       function invoke(cpu, target, args = []) {
+        if (typeof target === "string" && inlined[target]) {
+          const value = inlined[target](...args);
+          return { value, int: Number(BigInt.asIntN(32, BigInt(value))), f32: NaN, f64: NaN };
+        }
         const address = resolve(target),
           slot = addrToSlot.get(address);
         if (!slot) {
@@ -1877,22 +1890,26 @@
       // m_isDebugDrawEnabled, m_disablePlayerHitbox, m_hitboxesOnDeath,
       // m_anticheatSpike, m_timestamp, m_isBetweenSteps, m_clickBetweenSteps,
       // m_clickOnSteps; m_queuedButtons sits 0x470 bytes before the draw node.
+      // In 2.2091 (draw node at 0x3870) the hitbox flags moved 8 bytes and the
+      // rest 0x58 bytes further from the node (checked in updateDebugDraw,
+      // processQueuedButtons and LevelEditorLayer::updateOptions).
       let gameLayerFields = null;
       function getGameLayerFields(layer) {
         if (gameLayerFields || !layer) return gameLayerFields;
         const vtable = addresses["cocos2d::CCDrawNode::vtable"],
           limit = memory.buffer.byteLength - 16;
-        for (let offset = 0x400; offset < 0x8000; offset += 8) {
+        // The draw node is at 0x3870 in 2.2091; the vtable check confirms it.
+        for (let offset = 0x3800; offset < 0x3900; offset += 8) {
           const p = mem.ptr(layer + offset);
           if (p > 0x10000 && p < limit && p % 8 === 0 && mem.ptr(p) === vtable) {
             gameLayerFields = {
               debugDrawNode: offset,
-              debugDrawEnabled: offset + 16,
-              hitboxesOnDeath: offset + 18,
-              anticheatSpike: offset + 24,
-              timestamp: offset + 32,
-              clickBetweenSteps: offset + 41,
-              clickOnSteps: offset + 42,
+              debugDrawEnabled: offset + 0x18,
+              hitboxesOnDeath: offset + 0x1a,
+              anticheatSpike: offset + 0x70,
+              timestamp: offset + 0x78,
+              clickBetweenSteps: offset + 0x81,
+              clickOnSteps: offset + 0x82,
               queuedButtons: offset - 0x470,
             };
             break;
@@ -2223,7 +2240,7 @@
       }
 
       // "Mods" button on the game's main menu. Clicks are routed through a
-      // hook on MenuLayer::onMoreGames, which the button uses as its callback.
+      // hook on MenuLayer::onFacebook, which the button uses as its callback.
       let menuButton = 0;
       loader.hook("MenuLayer::init", (call) => {
         const layer = call.arg(0);
@@ -2236,7 +2253,7 @@
             width = loader.mem.f32(sizePtr),
             height = loader.mem.f32(sizePtr + 4),
             sprite = call.invoke("ButtonSprite::create", [{ str: "Mods" }, 0, 0, { f32: 0.7 }, 0, { str: "goldFont.fnt" }, { str: "GJ_button_01.png" }, { f32: 30 }]).value,
-            item = call.invoke("CCMenuItemSpriteExtra::create", [sprite, 0, layer, { selector: "MenuLayer::onMoreGames" }]).value,
+            item = call.invoke("CCMenuItemSpriteExtra::create", [sprite, 0, layer, { selector: "MenuLayer::onFacebook" }]).value,
             menu = call.invoke("cocos2d::CCMenu::create").value;
           call.invoke("cocos2d::CCMenu::addChild", [menu, item]);
           call.invoke("cocos2d::CCNode::setPosition", [menu, { point: [width - 45, height - 22] }]);
@@ -2246,7 +2263,7 @@
           console.warn("[mods] Could not add the Mods button to the main menu", buttonError);
         }
       });
-      loader.hook("MenuLayer::onMoreGames", (call) => {
+      loader.hook("MenuLayer::onFacebook", (call) => {
         if (menuButton && call.arg(1) === menuButton) {
           call.skip();
           setTimeout(open, 0);
@@ -2260,36 +2277,36 @@
     (function () {
       const loader = GDModLoader,
         mem = loader.mem,
-        OPERATOR_NEW = 0x8d0770,
-        // Field offsets in the Windows 2.2081 layout.
+        OPERATOR_NEW = 0xa77540,
+        // Field offsets in the Windows 2.2091 layout.
         OFF = {
-          alertButtonMenu: 0x220,
-          alertMainLayer: 0x240,
-          inputAllowedChars: 0x1e8,
-          inputMaxLabelScale: 0x20c,
-          inputPlaceholderScale: 0x210,
-          inputPlaceholderColor: 0x214,
-          inputTextField: 0x228,
-          inputMaxLength: 0x238,
-          inputTextLabel: 0x240,
-          inputPassword: 0x249,
-          scrollContentLayer: 0x1d8,
-          scrollCutContent: 0x1e0,
+          alertButtonMenu: 0x228,
+          alertMainLayer: 0x248,
+          inputAllowedChars: 0x1e0,
+          inputMaxLabelScale: 0x234,
+          inputPlaceholderScale: 0x238,
+          inputPlaceholderColor: 0x23c,
+          inputTextField: 0x250,
+          inputMaxLength: 0x260,
+          inputTextLabel: 0x268,
+          inputPassword: 0x271,
+          scrollContentLayer: 0x1e0,
+          scrollCutContent: 0x1e8,
           togglerOn: 0x188,
           simpleFirstLayer: 0x258,
           simpleSecondLayer: 0x260,
           accountName: 0x148,
           accountId: 0x168,
-          playerName: 0x268,
+          playerName: 0x290,
         },
         callbacks = new Map(),
         sliders = new Map(),
         slotLayouts = new Map(),
         thisOffsets = new Map();
 
-      // Buttons made here use MenuLayer::onMoreGames as their selector; the
+      // Buttons made here use MenuLayer::onFacebook as their selector; the
       // hook runs the JS callback for buttons it knows and skips the game's.
-      loader.hook("MenuLayer::onMoreGames", (call) => {
+      loader.hook("MenuLayer::onFacebook", (call) => {
         const sender = call.arg(1);
         let entry = callbacks.get(sender);
         if (!entry && sliders.size) {
@@ -2329,8 +2346,9 @@
       });
 
       // Sections of the game's images (.text and .rdata) after rebasing.
-      const CODE = [[0x401000, 0x915000], [0x10001000, 0x100e4000], [0x12001000, 0x12022000]],
-        READ_ONLY = [[0x915000, 0xaba000], [0x100e4000, 0x101a1000], [0x12022000, 0x12047000]],
+      // .text and .rdata of GeometryDash.exe, libcocos2d.dll and libExtensions.dll (2.2091).
+      const CODE = [[0x401000, 0xace000], [0x10001000, 0x100ea000], [0x12001000, 0x12022000]],
+        READ_ONLY = [[0xace000, 0xcfd000], [0x100ea000, 0x101ab000], [0x12022000, 0x12049000]],
         inRanges = (value, ranges) => ranges.some(([start, end]) => value >= start && value < end);
       // Virtual functions declared in a secondary base class (CCRGBAProtocol,
       // CCLabelProtocol...) take that base's subobject as `this`. Find it by
@@ -2596,7 +2614,7 @@
           },
           // A menu item showing `sprite`; onClick(ui, item) runs on press.
           button(sprite, onClick, target) {
-            const item = ptr("CCMenuItemSpriteExtra::create", [sprite, 0, target || ui.director(), { selector: "MenuLayer::onMoreGames" }]);
+            const item = ptr("CCMenuItemSpriteExtra::create", [sprite, 0, target || ui.director(), { selector: "MenuLayer::onFacebook" }]);
             callbacks.set(item, onClick);
             return item;
           },
@@ -2627,7 +2645,7 @@
             };
             const off = wrap(sprites ? sprites.off : ui.frame("GJ_checkOff_001.png")),
               onSprite = wrap(sprites ? sprites.on : ui.frame("GJ_checkOn_001.png"));
-            const item = ptr("CCMenuItemToggler::create", [off, onSprite, ui.director(), { selector: "MenuLayer::onMoreGames" }]);
+            const item = ptr("CCMenuItemToggler::create", [off, onSprite, ui.director(), { selector: "MenuLayer::onFacebook" }]);
             inv("CCMenuItemToggler::toggle", [item, on ? 1 : 0]);
             // The toggler flips itself after the callback, so report the new state.
             callbacks.set(item, (kitForCall, sender) => onToggle(kitForCall, !mem.u8(sender + OFF.togglerOn)));
@@ -2639,7 +2657,7 @@
           isToggled: (item) => !!mem.u8(item + OFF.togglerOn),
           // GD slider (0..1). onChange(ui, value) runs while dragging.
           slider(value, onChange, scale = 1) {
-            const slider = ptr("Slider::create", [ui.director(), { selector: "MenuLayer::onMoreGames" }, { str: "sliderBar.png" }, { str: "slidergroove.png" }, { str: "sliderthumb.png" }, { str: "sliderthumbsel.png" }, { f32: scale }]);
+            const slider = ptr("Slider::create", [ui.director(), { selector: "MenuLayer::onFacebook" }, { str: "sliderBar.png" }, { str: "slidergroove.png" }, { str: "sliderthumb.png" }, { str: "sliderthumbsel.png" }, { f32: scale }]);
             inv("Slider::setValue", [slider, { f32: Math.max(0, Math.min(1, value)) }]);
             sliders.set(slider, onChange);
             return slider;
@@ -2747,10 +2765,7 @@
             inv("CCTextInputNode::setString", [input, ui.gdString(text)]);
           },
           setAllowedChars(input, chars) {
-            // Overwrite the gd::string in place (the old buffer, if any, leaks).
-            const at = input + OFF.inputAllowedChars,
-              value = ui.gdString(chars).bytes;
-            value.forEach((byte, i) => mem.setU8(at + i, byte));
+            inv("CCTextInputNode::setAllowedChars", [input, ui.gdString(chars)]);
           },
 
           // ------------------------------------------------------- scroll list
@@ -3654,8 +3669,8 @@
         mem = loader.mem,
         // GameObject fields sit 0x18 further on than the bindings say.
         OFF = {
-          layerLowDetail: 0x884, // GJBaseGameLayer::m_lowDetailMode
-          layerExtraLDM: 0x885, // GJBaseGameLayer::m_extraLDM
+          layerLowDetail: 0x8a0, // GJBaseGameLayer::m_lowDetailMode
+          layerExtraLDM: 0x8a1, // GJBaseGameLayer::m_extraLDM
           objectType: 0x3a0,
           usesAudioScale: 0x3d0,
           objectID: 0x40c,
@@ -3977,7 +3992,7 @@
     (function () {
       const loader = GDModLoader,
         mem = loader.mem,
-        OFF = { player1: 0xda0, player2: 0xda8 },
+        OFF = { player1: 0xdb8, player2: 0xdc0 },
         // PlayerObject::setColor takes its CCRGBAProtocol base as `this`.
         RGBA = 0x140;
       let layer = 0;
@@ -4247,8 +4262,8 @@
     (function () {
       const loader = GDModLoader,
         mem = loader.mem,
-        // GJBaseGameLayer::m_isPlatformer (Windows 2.2081 layout).
-        PLATFORMER_OFFSET = 0x309e,
+        // GJBaseGameLayer::m_isPlatformer (Windows 2.2091 layout).
+        PLATFORMER_OFFSET = 0x317e,
         isTouchDevice = () => window.matchMedia("(any-pointer: coarse)").matches || navigator.maxTouchPoints > 0;
       let textBar = null,
         textInput = null,
@@ -4697,33 +4712,33 @@
       // What the hacks need to know about the running level, kept up to date
       // by hooks on the level's life cycle.
       const OFF = {
-        player1: 0xda0,
-        player2: 0xda8,
+        player1: 0xdb8,
+        player2: 0xdc0,
         level: 0x878,
-        lowDetail: 0x884,
-        attempts: 0x3084,
-        isPlatformer: 0x309e,
-        startPosObject: 0x3188,
-        isPracticeMode: 0x31f0,
-        levelLength: 0x3220,
-        isTestMode: 0x3230,
-        attemptLabel: 0x38d8,
-        percentageLabel: 0x38e0,
-        progressBar: 0x38f0,
-        progressFill: 0x38f8,
-        hasCompletedLevel: 0x397d,
-        isPaused: 0x39ef,
+        lowDetail: 0x8a0,
+        attempts: 0x3164,
+        isPlatformer: 0x317e,
+        startPosObject: 0x3270,
+        isPracticeMode: 0x32e0,
+        levelLength: 0x3318,
+        isTestMode: 0x3328,
+        attemptLabel: 0x3a88,
+        percentageLabel: 0x3a90,
+        progressBar: 0x3aa0,
+        progressFill: 0x3aa8,
+        hasCompletedLevel: 0x3bd5,
+        isPaused: 0x3c47,
         // PlayerObject (shared with Globed)
-        isShip: 0x9b9,
-        isBird: 0x9ba,
-        isBall: 0x9bb,
-        isDart: 0x9bc,
-        isRobot: 0x9bd,
-        isSpider: 0x9be,
-        isUpsideDown: 0x9bf,
-        isDead: 0x9c0,
-        isOnGround: 0x9c1,
-        isSwing: 0x9c4,
+        isShip: 0x9c1,
+        isBird: 0x9c2,
+        isBall: 0x9c3,
+        isDart: 0x9c4,
+        isRobot: 0x9c5,
+        isSpider: 0x9c6,
+        isUpsideDown: 0x9c7,
+        isDead: 0x9c8,
+        isOnGround: 0x9c9,
+        isSwing: 0x9cc,
         // GameObject (bindings + 0x18)
         objectType: 0x3a0,
         objectID: 0x40c,
@@ -4979,7 +4994,7 @@
           if (!(p > 0x10000 && p < mem.size())) return "";
           const vt = mem.ptr(p),
             base = vt >= 0x12000000 ? 0x12000000 : vt >= 0x10000000 ? 0x10000000 : 0x400000;
-          if (!((vt >= 0x915000 && vt < 0xaba000) || (vt >= 0x100e4000 && vt < 0x101a1000) || (vt >= 0x12022000 && vt < 0x12047000))) return "";
+          if (!((vt >= 0xace000 && vt < 0xcfd000) || (vt >= 0x100ea000 && vt < 0x101ab000) || (vt >= 0x12022000 && vt < 0x12049000))) return "";
           const col = mem.ptr(vt - 8),
             name = mem.cString(base + mem.u32(col + 12) + 16, 80);
           return name.startsWith(".?AV") ? name.slice(4, -2) : "";
@@ -6642,15 +6657,15 @@
       const value = (id, fallback) => config.get(id, fallback);
       // PlayerObject members (found at runtime by their class names).
       const P = {
-        isHidden: 0x72b,
-        ghostTrail: 0x730,
-        regularTrail: 0x7a0,
-        shipStreak: 0x7a8,
-        waveTrail: 0x7b0,
-        robotFire: 0xc10,
-        particles: [0x8b8, 0x8c0, 0x8c8, 0x8d0, 0x8d8, 0x8e0, 0x8e8, 0x8f0, 0x8f8, 0x908, 0x910],
-        alwaysShowStreak: 0x929,
-        position: 0xa90,
+        isHidden: 0x733,
+        ghostTrail: 0x738,
+        regularTrail: 0x7a8,
+        shipStreak: 0x7b0,
+        waveTrail: 0x7b8,
+        robotFire: 0xc18,
+        particles: [0x8c0, 0x8c8, 0x8d0, 0x8d8, 0x8e0, 0x8e8, 0x8f0, 0x8f8, 0x900, 0x910, 0x918],
+        alwaysShowStreak: 0x931,
+        position: 0xa98,
       };
       // HardStreak (wave trail) members after its CCDrawNode base.
       const H = { waveSize: 0x1b0, pulseSize: 0x1b4, isSolid: 0x1b8 };
@@ -7066,14 +7081,14 @@
       // GJBaseGameLayer / PlayLayer members (from Geode's bindings, checked
       // against members found at runtime).
       const L = {
-        extraDelta: 0x3250,
-        randomSeed: 0x32e0,
-        uiLayer: 0x3540,
-        timePlayed: 0x3560,
-        levelEndAnimationStarted: 0x3570,
-        levelSettings: 0xdb0,
-        attemptTime: 0x39c0,
-        currentCheckpoint: 0x3880,
+        extraDelta: 0x3350,
+        randomSeed: 0x33e0,
+        uiLayer: 0x3640,
+        timePlayed: 0x3660,
+        levelEndAnimationStarted: 0x3670,
+        levelSettings: 0xdc8,
+        attemptTime: 0x3c18,
+        currentCheckpoint: 0x3a30,
       };
       // LevelSettingsObject members.
       const S = { startMode: 0x148, startSpeed: 0x14c, startMini: 0x150, startDual: 0x151, platformerMode: 0x155, fontIndex: 0x168, isFlipped: 0x171, fixGravityBug: 0x1ca };
@@ -7557,7 +7572,7 @@
           call.invoke("cocos2d::CCNode::setVisible", [debugNode, 0]);
           return;
         }
-        playerPositions = [mem.ptr(layer + OFF.player1), mem.ptr(layer + OFF.player2)].filter(Boolean).map((p) => [mem.f32(p + 0xa90), mem.f32(p + 0xa94), p]);
+        playerPositions = [mem.ptr(layer + OFF.player1), mem.ptr(layer + OFF.player2)].filter(Boolean).map((p) => [mem.f32(p + 0xa98), mem.f32(p + 0xa9c), p]);
         call.invoke("GJBaseGameLayer::updateDebugDraw", [layer]);
         drawExtras(call, layer);
         call.invoke("cocos2d::CCNode::setVisible", [debugNode, 1]);
@@ -7644,7 +7659,7 @@
           };
         if (value("level.showhitboxes.traillength.toggle", false) && layer === game.layer) {
           for (const [x, y, p] of playerPositions) {
-            const size = mem.f32(p + 0x9f0) || 1;
+            const size = mem.f32(p + 0x9f8) || 1;
             trail.push([x, y, 15 * size]);
           }
           const limit = value("level.showhitboxes.traillength", 240) * playerPositions.length;
@@ -7870,23 +7885,23 @@
       const LV = {
         levelID: 0x148,
         levelName: 0x158,
-        isVerified: 0x2dc,
-        isVerifiedRaw: 0x2e4,
-        attempts: 0x2f0,
-        normalPercent: 0x328,
-        orbCompletion: 0x334,
-        newNormalPercent2: 0x340,
-        practicePercent: 0x34c,
-        password: 0x3a8,
-        originalLevel: 0x3b0,
-        requiredCoins: 0x434,
-        isUnlocked: 0x438,
-        levelType: 0x454,
+        isVerified: 0x350,
+        isVerifiedRaw: 0x358,
+        attempts: 0x364,
+        normalPercent: 0x39c,
+        orbCompletion: 0x3a8,
+        newNormalPercent2: 0x3b4,
+        practicePercent: 0x3c0,
+        password: 0x41c,
+        originalLevel: 0x424,
+        requiredCoins: 0x4a4,
+        isUnlocked: 0x4a8,
+        levelType: 0x4c4,
       };
       const USER_COMMENT_HISTORY = 0x1cc, // GJUserScore::m_commentHistoryStatus
         COMMENT_IS_SPAM = 0x190, // GJComment::m_isSpam
-        INPUT_ALLOWED = 0x1e8,
-        INPUT_MAX_LENGTH = 0x238,
+        INPUT_ALLOWED = 0x1e0,
+        INPUT_MAX_LENGTH = 0x260,
         GJ_ITEM = 12,
         ITEM_MUSIC_CUSTOMIZER = 16,
         ITEM_PRACTICE_MUSIC = 17,
@@ -7999,7 +8014,7 @@
       mod.hook("LevelTools::verifyLevelIntegrity", (call) => call.skip(1), () => on("bypass.levelkick"));
 
       // Pause buffering: inputs right after resuming are no longer dropped.
-      E.on("postUpdate", () => on("bypass.pausebuffering") && mem.setI32(game.layer + 0x32a4, 0));
+      E.on("postUpdate", () => on("bypass.pausebuffering") && mem.setI32(game.layer + 0x33a4, 0));
 
       // Shop items and unlocks.
       mod.hook("GameStatsManager::isItemUnlocked", (call) => {
@@ -8113,7 +8128,7 @@
       }
 
       // Hide triggers while playtesting.
-      const OBJECTS = 0xdb8; // GJBaseGameLayer::m_objects
+      const OBJECTS = 0xdd0; // GJBaseGameLayer::m_objects
       function setTriggersVisible(call, layer, visible) {
         for (const object of E.arrayItems(mem.ptr(layer + OBJECTS))) if (object && mem.u8(object + OFF.isTrigger)) call.invoke("cocos2d::CCNode::setVisible", [object, visible ? 1 : 0]);
       }
@@ -8135,7 +8150,7 @@
         if (!on("creator.editorwave")) return;
         for (const offset of [OFF.player1, OFF.player2]) {
           const p = mem.ptr(layer + offset),
-            wave = p && mem.ptr(p + 0x7b0);
+            wave = p && mem.ptr(p + 0x7b8);
           if (!wave) continue;
           mem.setU8(wave + 0x1ba, 1); // HardStreak::m_drawStreak
           call.invoke("cocos2d::CCNode::setVisible", [wave, 1]);
@@ -8157,7 +8172,9 @@
       mod.hook("PauseLayer::customSetup", asEditorLevel, () => on("creator.leveledit"));
       mod.hook("PauseLayer::onTryEdit", asEditorLevel, () => on("creator.leveledit"));
 
-      mod.hook("EditorPauseLayer::saveLevel", (call) => {
+      // 2.2091 inlines EditorPauseLayer::saveLevel; its work is done in
+      // LevelEditorLayer::saveLevel, which every editor save goes through.
+      mod.hook("LevelEditorLayer::saveLevel", (call) => {
         call.callOriginal();
         const level = E.game.editor && mem.ptr(E.game.editor + OFF.level);
         if (!level) return;
@@ -8193,7 +8210,7 @@
       sc.addButton("shortcuts.place-checkpoint", () => {
         if (!game.layer || !game.practice) return;
         loader.runOnGameThread((call) => {
-          const ui = mem.ptr(game.layer + 0x3540);
+          const ui = mem.ptr(game.layer + 0x3640);
           if (ui) call.invoke("UILayer::onCheck", [ui, 0]);
         });
       });
@@ -8644,7 +8661,7 @@
           time = 0;
         if (layer && call) percent = call.invoke("PlayLayer::getCurrentPercent", [layer]).f32;
         else if (cachedVars) percent = cachedVars.realProgress;
-        if (layer) time = mem.f64(layer + (E.level ? E.level.L.attemptTime : 0x39c0));
+        if (layer) time = mem.f64(layer + (E.level ? E.level.L.attemptTime : 0x3c18));
         const decimals = config.get("level.accuratepercentage", false) ? value("level.accuratepercentage.amount", 2) : 0;
         const vars = {
           fps: frameTimes.length,
@@ -8681,22 +8698,22 @@
           levelName: level ? mem.gdString(level + 0x158) : "",
           levelID: level ? mem.i32(level + 0x150) : 0,
           author: level ? mem.gdString(level + 0x1b8) : "",
-          levelAttempts: level ? mem.i32(level + 0x2f8) : 0,
-          levelStars: level ? mem.i32(level + 0x390) : 0,
-          bestPercent: level ? mem.i32(level + 0x328) : 0,
-          practicePercent: level ? mem.i32(level + 0x34c) : 0,
+          levelAttempts: level ? mem.i32(level + 0x36c) : 0,
+          levelStars: level ? mem.i32(level + 0x404) : 0,
+          bestPercent: level ? mem.i32(level + 0x39c) : 0,
+          practicePercent: level ? mem.i32(level + 0x3c0) : 0,
           playerX: 0,
           playerY: 0,
           editorMode: !!game.editor && !game.layer,
           username: loader.cocos && call ? safe(() => loader.cocos(call).playerName()) : "",
           modVersion: "1.9.4",
-          gameVersion: "2.2081",
+          gameVersion: "2.2091",
           emojis: EMOJI,
         };
         const p1 = game.player(1);
         if (p1) {
-          vars.playerX = mem.f32(p1 + 0xa90);
-          vars.playerY = mem.f32(p1 + 0xa94);
+          vars.playerX = mem.f32(p1 + 0xa98);
+          vars.playerY = mem.f32(p1 + 0xa9c);
         }
         cachedFrame = game.frame;
         cachedVars = vars;
@@ -10151,35 +10168,35 @@
         NAME_OFFSET = 30,
         NAME_HEIGHT = 17,
         MAX_NAME_WIDTH = 140,
-        // Field offsets for the Windows 2.2081 build (GJBaseGameLayer
+        // Field offsets for the Windows 2.2091 build (GJBaseGameLayer
         // m_player1/m_player2, PlayLayer m_level, GameManager fields and
         // PlayerObject's mode flags).
         OFF = {
-          player1: 0xda0,
-          player2: 0xda8,
+          player1: 0xdb8,
+          player2: 0xdc0,
           level: 0x878,
-          playerName: 0x268,
+          playerName: 0x290,
           // GameManager SeedValueRSV {random, seed, value}: value is the 3rd int.
-          playerColor: 0x324 + 8,
-          playerColor2: 0x330 + 8,
-          playerGlowColor: 0x33c + 8,
-          playerGlow: 0x388,
+          playerColor: 0x34c + 8,
+          playerColor2: 0x358 + 8,
+          playerGlowColor: 0x364 + 8,
+          playerGlow: 0x3b0,
           // PlayLayer m_attemptLabel..m_progressFill (verified at runtime).
-          attemptLabelGuess: 0x37f0,
-          isShip: 0x9b9,
-          isBird: 0x9ba,
-          isBall: 0x9bb,
-          isDart: 0x9bc,
-          isRobot: 0x9bd,
-          isSpider: 0x9be,
-          isUpsideDown: 0x9bf,
-          isDead: 0x9c0,
-          isOnGround: 0x9c1,
-          isGoingLeft: 0x9c2,
-          isSideways: 0x9c3,
-          isSwing: 0x9c4,
-          isDashing: 0x9e4,
-          vehicleSize: 0x9f0,
+          attemptLabelGuess: 0x3a88,
+          isShip: 0x9c1,
+          isBird: 0x9c2,
+          isBall: 0x9c3,
+          isDart: 0x9c4,
+          isRobot: 0x9c5,
+          isSpider: 0x9c6,
+          isUpsideDown: 0x9c7,
+          isDead: 0x9c8,
+          isOnGround: 0x9c9,
+          isGoingLeft: 0x9ca,
+          isSideways: 0x9cb,
+          isSwing: 0x9cc,
+          isDashing: 0x9ec,
+          vehicleSize: 0x9f8,
         },
         ICON = { cube: 0, ship: 1, ball: 2, ufo: 3, wave: 4, robot: 5, spider: 6, swing: 7, jetpack: 8 },
         MODE_TOGGLES = [
@@ -10358,7 +10375,7 @@
           left: mem.u8(player + OFF.isGoingLeft),
           mini: mem.f32(player + OFF.vehicleSize) !== 1 ? 1 : 0,
           dead: mem.u8(player + OFF.isDead),
-          yv: mem.f64(player + 0x9a0),
+          yv: mem.f64(player + 0x9a8),
           og: mem.u8(player + OFF.isOnGround),
         };
       }
@@ -10597,7 +10614,7 @@
       // labels (two CCLabelBMFonts) in the layout.
       function findProgressBar(ui, layer) {
         const labelVtable = mem.ptr(ui.label("0", "bigFont.fnt"));
-        for (let offset = OFF.attemptLabelGuess - 0x40; offset <= OFF.attemptLabelGuess + 0x40; offset += 8) {
+        for (let offset = OFF.attemptLabelGuess - 8; offset <= OFF.attemptLabelGuess + 0x40; offset += 8) {
           const a = mem.ptr(layer + offset),
             b = mem.ptr(layer + offset + 8);
           if (a > 0x10000 && b > 0x10000 && a < mem.size() && b < mem.size() && mem.ptr(a) === labelVtable && mem.ptr(b) === labelVtable) {
@@ -10874,7 +10891,7 @@
           return visual && !visual.hidden ? visual.player : 0;
         },
         levelLayer: () => local.layer,
-        isPlatformer: () => !!local.layer && !!mem.u8(local.layer + 0x309e),
+        isPlatformer: () => !!local.layer && !!mem.u8(local.layer + 0x317e),
         isHiddenPlayer(id) {
           const info = playerInfo(id);
           return !!info && hidden.has(hideKey(info));
@@ -12308,7 +12325,7 @@
         const s = GlobedMenu.state;
         GlobedMenu.state = null;
         if (s) loader.cocosForgetTree(ui.call, s.layer);
-        const scene = ui.ptr("PlayLayer::scene", [level, 0, 0]);
+        const scene = ui.ptr("PlayLayer::scene", [level, 0]);
         ui.inv("cocos2d::CCDirector::replaceScene", [ui.director(), ui.ptr("cocos2d::CCTransitionFade::create", [{ f32: 0.5 }, scene])]);
         if (s) ui.release(s.layer);
       }
@@ -13422,11 +13439,11 @@
       const loader = GDModLoader,
         mem = loader.mem,
         net = window.GlobedNet,
-        // PlayerObject fields (Windows 2.2081).
-        POS = 0xa90, // m_position
-        YVEL = 0x9a0, // m_yVelocity
-        ON_GROUND = 0x9c1,
-        VEHICLE_SIZE = 0x9f0;
+        // PlayerObject fields (Windows 2.2091).
+        POS = 0xa98, // m_position
+        YVEL = 0x9a8, // m_yVelocity
+        ON_GROUND = 0x9c9,
+        VEHICLE_SIZE = 0x9f8;
       const G = () => window.GlobedWeb;
       const roomOn = (key) => net.state === "connected" && !!net.room.id && !!net.room.settings[key];
       const inLevel = () => !!G() && G().isInLevel();
@@ -13988,17 +14005,17 @@
       const loader = GDModLoader,
         mem = loader.mem,
         VERSION = "5.11.2",
-        GD_VERSION = "2.2081",
-        // Game functions the Geode mods need, from Geode's 2.2081 bindings
+        GD_VERSION = "2.2091",
+        // Game functions the Geode mods need, from Geode's 2.2091 bindings
         // (Windows addresses rebased like the loader's own table).
         ADDRESSES = {
-          "MenuLayer::scene": 0x733900,
-          "PlayLayer::createObjectsFromSetupFinished": 0x7ad8d0,
-          "PlayLayer::updateTestModeLabel": 0x7a7990,
-          "PlayLayer::startMusic": 0x7baa60,
-          "PlayLayer::updateTimeLabel": 0x7b2560,
-          "UILayer::init": 0x8ccb00,
-          "EndLevelLayer::customSetup": 0x532e50,
+          "MenuLayer::scene": 0x871f10,
+          "PlayLayer::createObjectsFromSetupFinished": 0x90c1f0,
+          "PlayLayer::updateTestModeLabel": 0x905ed0,
+          "PlayLayer::startMusic": 0x91aed0,
+          "PlayLayer::updateTimeLabel": 0x910fe0,
+          "UILayer::init": 0xa6ff70,
+          "EndLevelLayer::customSetup": 0x603d90,
         },
         storagePrefix = "gd-geode-mod:";
       Object.assign(loader.addresses, ADDRESSES);
@@ -14538,7 +14555,7 @@
         if (!(p > 0x10000 && p < mem.size())) return "";
         const vt = mem.ptr(p),
           base = vt >= 0x12000000 ? 0x12000000 : vt >= 0x10000000 ? 0x10000000 : 0x400000;
-        if (!((vt >= 0x915000 && vt < 0xaba000) || (vt >= 0x100e4000 && vt < 0x101a1000) || (vt >= 0x12022000 && vt < 0x12047000))) return "";
+        if (!((vt >= 0xace000 && vt < 0xcfd000) || (vt >= 0x100ea000 && vt < 0x101ab000) || (vt >= 0x12022000 && vt < 0x12049000))) return "";
         const col = mem.ptr(vt - 8),
           name = mem.cString(base + mem.u32(col + 12) + 16, 80);
         return name.startsWith(".?AV") ? name.slice(4, -2).replace(/@cocos2d$/, "").replace(/@extension$/, "") : "";
@@ -14571,8 +14588,8 @@
         if (importMap) return importMap;
         importMap = new Map();
         try {
-          const RDATA = [0x915000, 0xaba000],
-            inCocos = (p) => p >= 0x10001000 && p < 0x100e4000;
+          const RDATA = [0xace000, 0xcfd000],
+            inCocos = (p) => p >= 0x10001000 && p < 0x100ea000;
           // The longest run of pointers into libcocos2d's code (with the data
           // imports in it) is its import address table.
           let best = null,
@@ -16994,7 +17011,7 @@
         if (!hasSettings) ui.setEnabled(settingsButton, false);
         popup.place(settingsButton, "BottomLeft", [28, 25], true);
         if (entry.id === "geode.loader") {
-          const hash = ui.label("Loader: web (JavaScript), Bindings: 2.2081", "chatFont.fnt", 0.7);
+          const hash = ui.label("Loader: web (JavaScript), Bindings: 2.2091", "chatFont.fnt", 0.7);
           ui.anchor(hash, 0.5, 1);
           ui.opacity(hash, 51);
           popup.place(hash, "Bottom", [0, -5]);
@@ -18147,7 +18164,7 @@
       }
     })();
     // Geode Web: what the Geode mods share. The running PlayLayer and
-    // PauseLayer (PlayLayer::get()), member offsets from Geode's 2.2081
+    // PauseLayer (PlayLayer::get()), member offsets from Geode's 2.2091
     // bindings, GJGameLevel values, and the Node IDs mod (geode.node-ids):
     // IDs and Geode's extra menus for the layers the mods change.
     (function () {
@@ -18156,90 +18173,90 @@
       const loader = Geode.loader,
         mem = Geode.mem;
       Object.assign(loader.addresses, {
-        "PauseLayer::onQuit": 0x77ebc0,
-        "PauseLayer::tryQuit": 0x77e9c0,
-        "EndLevelLayer::onHideLayer": 0x5353e0,
-        "EndLevelLayer::onReplay": 0x534e80,
-        "EndLevelLayer::onMenu": 0x535090,
-        "PauseLayer::keyDown": 0x77ed10,
-        "EditorPauseLayer::customSetup": 0x4da550,
-        "EditLevelLayer::init": 0x4d5440,
-        "EditorPauseLayer::init": 0x4d9ec0,
-        "LevelInfoLayer::scene": 0x6f70c0,
-        "LevelInfoLayer::setupProgressBars": 0x6fa700,
-        "LevelPage::init": 0x719c20,
-        "LevelPage::updateDynamicPage": 0x71a8b0,
-        "LevelCell::loadFromLevel": 0x4ae050,
-        "EditLevelLayer::scene": 0x4d52b0,
-        "LevelSearchLayer::init": 0x70c190,
-        "LevelSearchLayer::onSearch": 0x711730,
-        "GJGarageLayer::init": 0x673050,
-        "GameStatsManager::hasUserCoin": 0x5dfce0,
-        "GameStatsManager::hasPendingUserCoin": 0x5dfe60,
-        "PlayLayer::showNewBest": 0x7a9550,
-        "PlayLayer::~PlayLayer": 0x7a57b0,
+        "PauseLayer::onQuit": 0x8db760,
+        "PauseLayer::tryQuit": 0x8db520,
+        "EndLevelLayer::onHideLayer": 0x606710,
+        "EndLevelLayer::onReplay": 0x6061b0,
+        "EndLevelLayer::onMenu": 0x6063c0,
+        "PauseLayer::keyDown": 0x8db900,
+        "EditorPauseLayer::customSetup": 0x581550,
+        "EditLevelLayer::init": 0x5784a0,
+        "EditorPauseLayer::init": 0x580e80,
+        "LevelInfoLayer::scene": 0x81bc20,
+        "LevelInfoLayer::setupProgressBars": 0x81f820,
+        "LevelPage::init": 0x843150,
+        "LevelPage::updateDynamicPage": 0x843df0,
+        "LevelCell::loadFromLevel": 0x548a80,
+        "EditLevelLayer::scene": 0x5782c0,
+        "LevelSearchLayer::init": 0x834450,
+        "LevelSearchLayer::onSearch": 0x839e00,
+        "GJGarageLayer::init": 0x77b7c0,
+        "GameStatsManager::hasUserCoin": 0x6e3630,
+        "GameStatsManager::hasPendingUserCoin": 0x6e37d0,
+        "PlayLayer::showNewBest": 0x907e20,
+        "PlayLayer::~PlayLayer": 0x903640,
       });
-      // Member offsets (Windows 2.2081, checked against the values the port
-      // already relies on).
+      // Member offsets (Windows 2.2091, each matched to its 2.2081 value in
+      // functions that use it in both builds).
       const OFF = {
         // GJBaseGameLayer
         level: 0x878,
-        player1: 0xda0,
-        player2: 0xda8,
-        attempts: 0x3084,
-        isPlatformer: 0x309e,
-        startPosObject: 0x3188,
-        isPracticeMode: 0x31f0,
-        isTestMode: 0x3230,
-        levelEndAnimationStarted: 0x3578,
+        player1: 0xdb8,
+        player2: 0xdc0,
+        attempts: 0x3164,
+        isPlatformer: 0x317e,
+        startPosObject: 0x3270,
+        isPracticeMode: 0x32e0,
+        isTestMode: 0x3328,
+        levelEndAnimationStarted: 0x3678,
         // PlayLayer
-        attemptLabel: 0x38d8,
-        percentageLabel: 0x38e0,
-        progressBar: 0x38f0,
-        progressFill: 0x38f8,
-        progressWidth: 0x3900,
-        progressHeight: 0x3904,
-        jumps: 0x3970,
-        hasCompletedLevel: 0x397d,
-        lastAttemptPercent: 0x3980,
-        attemptTime: 0x39c0,
-        isPaused: 0x39ef,
-        infoLabel: 0x39f8,
+        attemptLabel: 0x3a88,
+        percentageLabel: 0x3a90,
+        progressBar: 0x3aa0,
+        progressFill: 0x3aa8,
+        progressWidth: 0x3ab0,
+        progressHeight: 0x3ab4,
+        jumps: 0x3bc8,
+        hasCompletedLevel: 0x3bd5,
+        lastAttemptPercent: 0x3bd8,
+        attemptTime: 0x3c18,
+        isPaused: 0x3c47,
+        infoLabel: 0x3c50,
         // PlayerObject
-        isDead: 0x9c0,
+        isDead: 0x9c8,
         // GameObject
         objectID: 0x40c,
         positionX: 0x3b8,
         // StartPosObject / LevelSettingsObject
-        disableStartPos: 0x173,
+        disableStartPos: 0x1d8,
       };
       // GJGameLevel members (SeedValueRSV values sit 8 bytes in).
       const LV = {
         levelID: 0x150,
         levelName: 0x158,
         creatorName: 0x1b8,
-        objectCount: 0x2b4,
-        workingTime: 0x2cc,
-        workingTime2: 0x2d0,
-        attempts: 0x2f8,
-        jumps: 0x304,
-        clicks: 0x310,
-        attemptTime: 0x31c,
-        normalPercent: 0x328,
-        newNormalPercent2: 0x348,
-        practicePercent: 0x34c,
-        levelLength: 0x358,
-        stars: 0x390,
-        coins: 0x398,
-        coinsVerified: 0x3a4,
-        firstCoinVerified: 0x3cc,
-        secondCoinVerified: 0x3d8,
-        thirdCoinVerified: 0x3e4,
-        levelType: 0x454,
-        personalBests: 0x4a8,
-        bestTime: 0x514,
-        bestPoints: 0x548,
-        demon: 0x380,
+        objectCount: 0x2bc,
+        workingTime: 0x2d4,
+        workingTime2: 0x2d8,
+        attempts: 0x36c,
+        jumps: 0x378,
+        clicks: 0x384,
+        attemptTime: 0x390,
+        normalPercent: 0x39c,
+        newNormalPercent2: 0x3bc,
+        practicePercent: 0x3c0,
+        levelLength: 0x3cc,
+        stars: 0x404,
+        coins: 0x40c,
+        coinsVerified: 0x418,
+        firstCoinVerified: 0x440,
+        secondCoinVerified: 0x44c,
+        thirdCoinVerified: 0x458,
+        levelType: 0x4c4,
+        personalBests: 0x518,
+        bestTime: 0x588,
+        bestPoints: 0x5b8,
+        demon: 0x3f4,
       };
       const LEVEL_TYPE = { Local: 1, Editor: 2, Saved: 3, SearchResult: 4 };
       const game = {
@@ -19376,7 +19393,7 @@
       Geode.port("weebify.coins_in_pause_menu", {}, (mod) => {
         // PlayLayer::m_collectedItems has the coins of this attempt.
         function collectedThisAttempt(ui, i) {
-          const dict = Geode.member(game.playLayer, "CCDictionary", "GJBaseGameLayer.collectedItems", 0x3200, 0x3240),
+          const dict = Geode.member(game.playLayer, "CCDictionary", "GJBaseGameLayer.collectedItems", 0x3308, 0x3310),
             objectForKey = Geode.cocosFunction("?objectForKey@CCDictionary@cocos2d@@QEAAPEAVCCObject@2@AEBV");
           if (!dict || !objectForKey) return false;
           return !!ui.inv(objectForKey, [dict, ui.gdString(String(i + 1))]).value;
@@ -19398,7 +19415,7 @@
               ui.setLayout(menu, Geode.Layout.row({ gap: 10, autoScale: false }), false);
               const levelID = mem.i32(level + LV.levelID),
                 coinCount = mem.i32(level + LV.coins),
-                dailyID = mem.i32(level + 0x374),
+                dailyID = mem.i32(level + 0x3e8),
                 suffix = dailyID > 0 ? "_" + dailyID : "",
                 main = mem.i32(level + LV.levelType) === game.LEVEL_TYPE.Local || MAIN_LEVELS.includes(levelID);
               const verified = !!mem.i32(level + LV.coinsVerified);
@@ -19587,7 +19604,7 @@
           { when: when("level-edit-menu") },
         );
         // The mod looks for a "guidelines-menu", which Node IDs doesn't give
-        // the editor pause menu on 2.2081, so it adds nothing there either.
+        // the editor pause menu, so it adds nothing there either.
         mod.modify(
           "EditorPauseLayer",
           {
@@ -19637,7 +19654,7 @@
         AUDIO_VISUALIZER = "0144",
         SHOW_TIME = "0145";
       // PlayLayer members (GeometryDash.bro).
-      const PL = { uiLayer: 0x3540, audioVisualizerBG: 0x36f0, audioVisualizerSFX: 0x36f8, checkpointArray: 0x3888 };
+      const PL = { uiLayer: 0x3640, audioVisualizerBG: 0x37f0, audioVisualizerSFX: 0x37f8, checkpointArray: 0x3a38 };
 
       Geode.port("zenzo.hide_pause_menu", {}, (mod) => {
         const setting = (key) => mod.getSettingValue(key);
@@ -19896,39 +19913,38 @@
         game = Geode.game,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
-        "MenuLayer::onDaily": 0x7350a0,
-        "CreatorLayer::scene": 0x49bfd0,
-        "CreatorLayer::onChallenge": 0x49e420,
-        "GJPathsLayer::create": 0x684b00,
-        "GJPathSprite::create": 0x689050,
-        "GJPathSprite::updateState": 0x689220,
-        "DialogObject::create": 0x4d32d0,
-        "DialogLayer::createDialogLayer": 0x4d3490,
-        "DialogLayer::animateInRandomSide": 0x4d4170,
-        "GameStatsManager::getStat": 0x5d51b0,
-        "GameStatsManager::getChallenge": 0x5e1e40,
-        "GameStatsManager::storeRewardState": 0x5e18e0,
-        "GameManager::getUGV": 0x5834a0,
-        "GameManager::setUGV": 0x583340,
-        "GameManager::fadeInMusic": 0x57bba0,
-        "FMODAudioEngine::playMusic": 0x45a140,
-        "GameLevelManager::sharedState": 0x542d10,
-        "GameLevelManager::getGJRewards": 0x566020,
-        "SecretRewardsLayer::scene": 0x7d2510,
-        "SecretRewardsLayer::onBack": 0x7d7c20,
-        "SecretRewardsLayer::onShop": 0x7d66d0,
-        "GJShopLayer::scene": 0x6a95b0,
-        "GJShopLayer::onBack": 0x6acd70,
-        "RewardsPage::rewardsStatusFinished": 0x7cd490,
-        "ChallengeNode::onClaimReward": 0x487d80,
-        "EditorPauseLayer::init": 0x4d9ec0,
+        "MenuLayer::onDaily": 0x873b70,
+        "CreatorLayer::scene": 0x535510,
+        "CreatorLayer::onChallenge": 0x538460,
+        "GJPathsLayer::create": 0x792820,
+        "GJPathSprite::create": 0x796e70,
+        "GJPathSprite::updateState": 0x797020,
+        "DialogObject::create": 0x574920,
+        "DialogLayer::createDialogLayer": 0x574ae0,
+        "DialogLayer::animateInRandomSide": 0x575830,
+        "GameStatsManager::getStat": 0x6db160,
+        "GameStatsManager::getChallenge": 0x6e5830,
+        "GameStatsManager::storeRewardState": 0x6e5290,
+        "GameManager::getUGV": 0x67e9c0,
+        "GameManager::setUGV": 0x67e830,
+        "GameManager::fadeInMusic": 0x676a30,
+        "FMODAudioEngine::playMusic": 0x462d50,
+        "GameLevelManager::getGJRewards": 0x65ce00,
+        "SecretRewardsLayer::scene": 0x967ee0,
+        "SecretRewardsLayer::onBack": 0x96d700,
+        "SecretRewardsLayer::onShop": 0x96c130,
+        "GJShopLayer::scene": 0x7af830,
+        "GJShopLayer::onBack": 0x7b30c0,
+        "RewardsPage::rewardsStatusFinished": 0x962d20,
+        "ChallengeNode::onClaimReward": 0x4a0540,
+        "EditorPauseLayer::init": 0x580e80,
       });
       // Offsets (GeometryDash.bro, after CCObject's 0x38 and CCNode's 0x140).
-      const GSM = { rewardItems: 0x210, activePath: 0x3dc },
+      const GSM = { rewardItems: 0x210, activePath: 0x3e4 },
         CHALLENGE_CAN_CLAIM = 0x64,
         REWARD_TIME_REMAINING = 0x3c,
         TAG = 0x10, // CCObject::m_nTag
-        GLM_REWARD_DELEGATE = 0x358,
+        GLM_REWARD_DELEGATE = 0x600,
         ID = "km7dev.quests_in_pause_menu";
       const WHITE = () => ({ bytes: new Uint8Array([255, 255, 255, 0]) });
 
@@ -20241,7 +20257,7 @@
             addToMenu(() => createPathButton(ui), "paths");
           },
         });
-        // Node IDs has no "guidelines-menu" on 2.2081, so like the mod this
+        // Node IDs has no "guidelines-menu", so like the mod this
         // adds nothing to the editor pause menu.
         mod.modify("EditorPauseLayer", {
           init(self) {
@@ -20300,7 +20316,7 @@
       const Geode = window.Geode;
       if (!Geode) return;
       const loader = Geode.loader;
-      Object.assign(loader.addresses, { "GameManager::reloadAll": 0x58a410, "MenuLayer::onQuit": 0x735f90 });
+      Object.assign(loader.addresses, { "GameManager::reloadAll": 0x6877b0, "MenuLayer::onQuit": 0x875160 });
 
       Geode.port("weebify.restartbtn", {}, (mod) => {
         const setting = (key) => mod.getSettingValue(key);
@@ -20412,7 +20428,7 @@
       if (!Geode) return;
       const mem = Geode.mem,
         game = Geode.game;
-      const ANTICHEAT_SPIKE = 0x3788; // GJBaseGameLayer::m_anticheatSpike
+      const ANTICHEAT_SPIKE = 0x38e0; // GJBaseGameLayer::m_anticheatSpike
       // resources/deathMessagesTemplate.txt
       const TEMPLATE =
         "# Write each message on a separate line.\n# If a message is too long, it may go off screen.\n# Each message is chosen at random and won't be the same as the previous message.\n\nYou died. Again.\nUnfortunately, you died.\nStop messing up.\nSkill issue.\nI blame lag.\nYou can do better than that.\nFocus.\nYou learn more with each try. Keep going!\nNo pain, no gain.\nHow did you even die there?\n\n# If a message ends with \\#, it will only have a chance to appear at a certain percentage.\n# Any number that is higher than 100, lower than 0, or contains anything except a whole number can be shown at any time.\n# The following message will only appear when dying at 99%.\n\n99%... that's rough. \\99";
@@ -20503,40 +20519,40 @@
         game = Geode.game,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
-        "GameManager::countForType": 0x581c00,
-        "GameManager::isIconUnlocked": 0x57c500,
-        "GameManager::isColorUnlocked": 0x57c8e0,
-        "GameManager::colorForIdx": 0x581350,
-        "GameManager::setGameVariable": 0x582eb0,
-        "GameStatsManager::toggleEnableItem": 0x5e5bd0,
-        "PlayerObject::setColor": 0x79d310,
-        "PlayerObject::setSecondColor": 0x79d3a0,
-        "PlayerObject::toggleGhostEffect": 0x79ee30,
-        "PlayerObject::updatePlayerGlow": 0x7a02a0,
-        "PlayerObject::updateGlowColor": 0x79d430,
-        "PlayerObject::setupStreak": 0x7887c0,
-        "PlayerObject::updatePlayerFrame": 0x79dc50,
-        "PlayerObject::updatePlayerShipFrame": 0x79de80,
-        "PlayerObject::updatePlayerRollFrame": 0x79e580,
-        "PlayerObject::updatePlayerBirdFrame": 0x79e2e0,
-        "PlayerObject::updatePlayerDartFrame": 0x79e9e0,
-        "PlayerObject::updatePlayerSwingFrame": 0x79e7b0,
-        "PlayerObject::updatePlayerJetpackFrame": 0x79e0b0,
-        "PlayerObject::createRobot": 0x787ef0,
-        "PlayerObject::createSpider": 0x7882b0,
-        "GJEffectManager::getAllColorActions": 0x65b2d0,
-        "GJEffectManager::getColorAction": 0x65bc00,
+        "GameManager::countForType": 0x67d010,
+        "GameManager::isIconUnlocked": 0x6773d0,
+        "GameManager::isColorUnlocked": 0x6777a0,
+        "GameManager::colorForIdx": 0x67c5b0,
+        "GameManager::setGameVariable": 0x67e320,
+        "GameStatsManager::toggleEnableItem": 0x6e9810,
+        "PlayerObject::setColor": 0x8fb630,
+        "PlayerObject::setSecondColor": 0x8fb6c0,
+        "PlayerObject::toggleGhostEffect": 0x8fd180,
+        "PlayerObject::updatePlayerGlow": 0x8fe840,
+        "PlayerObject::updateGlowColor": 0x8fb750,
+        "PlayerObject::setupStreak": 0x8e6a00,
+        "PlayerObject::updatePlayerFrame": 0x8fbfa0,
+        "PlayerObject::updatePlayerShipFrame": 0x8fc1e0,
+        "PlayerObject::updatePlayerRollFrame": 0x8fc8f0,
+        "PlayerObject::updatePlayerBirdFrame": 0x8fc640,
+        "PlayerObject::updatePlayerDartFrame": 0x8fcd50,
+        "PlayerObject::updatePlayerSwingFrame": 0x8fcb20,
+        "PlayerObject::updatePlayerJetpackFrame": 0x8fc410,
+        "PlayerObject::createRobot": 0x8e60d0,
+        "PlayerObject::createSpider": 0x8e64c0,
+        "GJEffectManager::getAllColorActions": 0x7655d0,
+        "GJEffectManager::getColorAction": 0x765ef0,
       });
       // GameManager's icon values (SeedValueRSV: random, seed, value).
       const GM = {
-        cube: 0x2c4, ship: 0x2d0, ball: 0x2dc, ufo: 0x2e8, wave: 0x2f4, robot: 0x300, spider: 0x30c, swing: 0x318,
-        color1: 0x324, color2: 0x330, glowColor: 0x33c, trail: 0x348, shipFire: 0x354, deathEffect: 0x360, jetpack: 0x36c,
-        glow: 0x388, loadedDeathEffect: 0x3d0,
+        cube: 0x2ec, ship: 0x2f8, ball: 0x304, ufo: 0x310, wave: 0x31c, robot: 0x328, spider: 0x334, swing: 0x340,
+        color1: 0x34c, color2: 0x358, glowColor: 0x364, trail: 0x370, shipFire: 0x37c, deathEffect: 0x388, jetpack: 0x394,
+        glow: 0x3b0, loadedDeathEffect: 0x404,
       };
       // PlayerObject members.
       const PO = {
-        hasGlow: 0x72a, ghostType: 0x72c, regularTrail: 0x7a0, waveTrail: 0x7b0, hasCustomGlowColor: 0x980, glowColor: 0x981,
-        isShip: 0x9b9, isBird: 0x9ba, isBall: 0x9bb, isDart: 0x9bc, isSwing: 0x9c4, playerColor1: 0xa8a, playerColor2: 0xa8d, isPlatformer: 0xb70,
+        hasGlow: 0x732, ghostType: 0x734, regularTrail: 0x7a8, waveTrail: 0x7b8, hasCustomGlowColor: 0x988, glowColor: 0x989,
+        isShip: 0x9c1, isBird: 0x9c2, isBall: 0x9c3, isDart: 0x9c4, isSwing: 0x9cc, playerColor1: 0xa92, playerColor2: 0xa95, isPlatformer: 0xb78,
       };
       const RGBA_BASE = 0x140; // CCNodeRGBA's CCRGBAProtocol in a PlayerObject
       const CA = { fromColor: 0x48, duration: 0x50, blending: 0x54, playerColor: 0x58 }; // ColorAction
@@ -20715,7 +20731,7 @@
               }
             }
             // The end portal's bar and the progress bar take color 1 too.
-            const endPortal = mem.ptr(layer + 0x3228);
+            const endPortal = mem.ptr(layer + 0x3320);
             if (endPortal && p1) {
               const bar = Geode.member(endPortal, "CCSprite", "EndPortalObject.gradientBar", 0x500, 0x5a0);
               if (bar) ui.color(bar, readColor(p1 + PO.playerColor1));
@@ -20742,14 +20758,14 @@
         game = Geode.game,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
-        "EffectGameObject::triggerObject": 0x8a5f30,
-        "FMODAudioEngine::playEffectAdvanced": 0x456f30,
+        "EffectGameObject::triggerObject": 0xa47bf0,
+        "FMODAudioEngine::playEffectAdvanced": 0x45faf0,
       });
       const OBJECT_TYPE = 0x3a0, // GameObject::m_objectType
         SECRET_COIN = 22,
         USER_COIN = 31,
-        IS_EDITOR = 0x309c, // GJBaseGameLayer::m_isEditor
-        ENGINE = 0xac2e88; // FMODAudioEngine::sharedEngine()'s instance
+        IS_EDITOR = 0x317c, // GJBaseGameLayer::m_isEditor
+        ENGINE = 0xd0bf60; // FMODAudioEngine::sharedEngine()'s instance
       const ID = "dominodev.coin-sounds",
         CUSTOM_PATH = "geode/" + ID + "-custom";
 
@@ -20815,9 +20831,9 @@
         game = Geode.game,
         LV = game.LV,
         loader = Geode.loader;
-      loader.addresses["GJGameLevel::savePercentage"] = 0x56c8b0;
-      const DAILY_ID = 0x374, // GJGameLevel::m_dailyID's value
-        GAUNTLET_LEVEL = 0x2c9, // GJGameLevel::m_gauntletLevel
+      loader.addresses["GJGameLevel::savePercentage"] = 0x6641b0;
+      const DAILY_ID = 0x3e8, // GJGameLevel::m_dailyID's value
+        GAUNTLET_LEVEL = 0x2d1, // GJGameLevel::m_gauntletLevel
         Z_ORDER = 0x2c; // CCObject::m_nZOrder
       const PERCENTAGE_REGEX = /^(?:(?:\d+(?:\.\d+)?%)([^\n\d]*))+(\d+(?:\.\d+)?%)$/i,
         TRAILING_ZEROES_REGEX = /(.*[^0])(0+)$/i,
@@ -21041,14 +21057,14 @@
       const mem = Geode.mem,
         game = Geode.game;
       Object.assign(Geode.loader.addresses, {
-        "PlayLayer::postUpdate": 0x7b4ba0,
-        "EnhancedGameObject::hasBeenActivated": 0x5a4b50,
+        "PlayLayer::postUpdate": 0x913ca0,
+        "EnhancedGameObject::hasBeenActivated": 0x6a1af0,
       });
       const GOLD_COIN_ID = 142,
         SILVER_COIN_ID = 1329,
         COINS_CONTAINER_TAG = 800,
-        OBJECTS = 0xdb8, // GJBaseGameLayer::m_objects
-        LEVEL_LENGTH = 0x3220, // GJBaseGameLayer::m_levelLength
+        OBJECTS = 0xdd0, // GJBaseGameLayer::m_objects
+        LEVEL_LENGTH = 0x3318, // GJBaseGameLayer::m_levelLength
         POSITION_X = 0x3b8, // GameObject::m_positionX (double)
         TAG = 0x10; // CCObject::m_nTag
 
@@ -21117,7 +21133,7 @@
       const mem = Geode.mem,
         game = Geode.game,
         LV = game.LV;
-      Geode.loader.addresses["PlayLayer::setupHasCompleted"] = 0x7a66d0;
+      Geode.loader.addresses["PlayLayer::setupHasCompleted"] = 0x904710;
       const ID = "prevter.go-indicator",
         BEST = "best"; // IndicatorData::enableBestMode (infinity in the mod)
       const FONT_FILES = ["bigFont.fnt", "chatFont.fnt", "goldFont.fnt", ...Array.from({ length: 59 }, (_, i) => "gjFont" + String(i + 1).padStart(2, "0") + ".fnt")];
@@ -21436,15 +21452,15 @@
         game = Geode.game,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
-        "GJBaseGameLayer::setupLevelStart": 0x612220,
-        "GJBaseGameLayer::resetLevelVariables": 0x63b040,
-        "GJBaseGameLayer::applyTimeWarp": 0x6361a0,
-        "PlayerObject::pushButton": 0x797f40,
-        "PlayerObject::releaseButton": 0x7981d0,
+        "GJBaseGameLayer::setupLevelStart": 0x7193a0,
+        "GJBaseGameLayer::resetLevelVariables": 0x744fa0,
+        "GJBaseGameLayer::applyTimeWarp": 0x73efa0,
+        "PlayerObject::pushButton": 0x8f6200,
+        "PlayerObject::releaseButton": 0x8f64c0,
       });
       const ID = "khronophobia.inputs_viewer",
-        PLATFORMER = 0x309e, // GJBaseGameLayer::m_isPlatformer
-        TWO_PLAYER = 0x3bc; // GJGameLevel::m_twoPlayerMode
+        PLATFORMER = 0x317e, // GJBaseGameLayer::m_isPlatformer
+        TWO_PLAYER = 0x430; // GJGameLevel::m_twoPlayerMode
       const constants = { buttonHeightNormal: 20, buttonHeightTall: 27, buttonWidth: 20 };
       const Button = { Jump: 1, Left: 2, Right: 3 };
 
@@ -22024,10 +22040,10 @@
         game = Geode.game,
         LV = game.LV;
       Object.assign(Geode.loader.addresses, {
-        "LevelInfoLayer::setupLevelInfo": 0x6fae10,
-        "LevelInfoLayer::levelDownloadFinished": 0x6fba60,
+        "LevelInfoLayer::setupLevelInfo": 0x81fd50,
+        "LevelInfoLayer::levelDownloadFinished": 0x820980,
       });
-      const TIMESTAMP = 0x4c8, // GJGameLevel::m_timestamp
+      const TIMESTAMP = 0x538, // GJGameLevel::m_timestamp
         LEVEL_STRING = 0x198; // GJGameLevel::m_levelString
 
       // From CVolton's BetterInfo (cvoltonLevelTime.cpp): the level's length
@@ -22100,11 +22116,12 @@
           if (levelLengthMinutes >= XXLPlusLength) XLstring += "+";
           return XLstring;
         }
-        // LevelInfoLayer::m_lengthLabel: six pointers after m_level.
+        // LevelInfoLayer::m_lengthLabel: seven pointers after m_level
+        // (2.2091 added m_editBtn in between).
         function lengthLabel(layer, level) {
           for (let offset = 0x1d0; offset < 0x300; offset += 8) {
             if (mem.ptr(layer + offset) !== level) continue;
-            const label = mem.ptr(layer + offset + 48);
+            const label = mem.ptr(layer + offset + 56);
             return Geode.rtti(label) === "CCLabelBMFont" ? label : 0;
           }
           return 0;
@@ -22227,9 +22244,8 @@
       const mem = Geode.mem,
         loader = Geode.loader;
       Object.assign(loader.addresses, {
-        "GameLevelManager::sharedState": 0x542d10,
-        "GameLevelManager::getGJRewards": 0x566020,
-        "RewardsPage::rewardsStatusFinished": 0x7cd490,
+        "GameLevelManager::getGJRewards": 0x65ce00,
+        "RewardsPage::rewardsStatusFinished": 0x962d20,
       });
       const ID = "lilnibblit.chestalert",
         REWARD_ITEMS = 0x210, // GameStatsManager::m_rewardItems
