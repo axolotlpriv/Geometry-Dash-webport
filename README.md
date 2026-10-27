@@ -16,7 +16,7 @@ The first load requires an Internet connection. To play offline, download index.
 
 ## Updating
 
-The online version is updated whenever changes are published. Reload the page to get the latest version. If the changes don't appear, press `Ctrl + F5`.
+The online version is updated whenever changes are published.
 
 ### Using a downloaded copy?
 
@@ -56,7 +56,7 @@ The game can also be played on mobile phones and tablets. Tap to jump, drag to s
 | --------------------- | --------------------- |
 | Name                  | Geometry Dash webport |
 | Type                  | Webport / HTML        |
-| Geometry Dash version | 2.2081                |
+| Geometry Dash version | 2.2091                |
 | Platform              | Web browser           |
 | Technologies          | HTML5, JavaScript     |
 
@@ -169,7 +169,7 @@ If the problem continues, it could be related to your browser or the service hos
 
 ## Offline Mode and Limitations
 
-Offline mode applies only to the downloaded `index.html` file opened directly from your device's storage. It does not apply to the online version hosted on GitHub Pages, which always requires an Internet connection.
+Offline mode applies only to the downloaded `index.html` file opened directly from your device's storage. It does not apply to the online version hosted on Cloudflare Pages, which always requires an Internet connection.
 
 Keep these limitations in mind:
 
