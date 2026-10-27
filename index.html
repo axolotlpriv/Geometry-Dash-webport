@@ -18436,11 +18436,19 @@
           game.pauseLayer = 0;
         }, { priority: -FIRST });
       }
+      // The menus pauseLayerIDs adds, with the layer they move with (2.2091's
+      // hide button slides the content layer off the screen).
+      let pauseMenus = null;
       function pauseLayerIDs(ui, layer) {
         const [w, h] = ui.winSize(),
-          children = ui.children(layer);
+          cls = (node) => ui.className(node);
         ui.setID(layer, "PauseLayer");
-        const cls = (node) => ui.className(node);
+        // 2.2091 builds the pause menu inside a content layer (its hide button
+        // hides that layer); 2.2081 put everything on the PauseLayer itself.
+        const content =
+          ui.children(layer).find((c) => cls(c) === "CCLayer" && ui.children(c).some((m) => cls(m) === "CCMenu" && ui.children(m).length >= 4)) || layer;
+        if (content !== layer) ui.setID(content, "content-layer");
+        const children = ui.children(content);
         const bg = children.find((c) => cls(c) === "CCScale9Sprite");
         if (bg) ui.setID(bg, "background");
         const labels = children.filter((c) => cls(c) === "CCLabelBMFont");
@@ -18469,14 +18477,20 @@
             else if (ly - by > 10 && ly - by < 30 && Math.abs(lx - w / 2) < 5) ui.setID(label, prefix + "mode-label");
           }
         }
-        // Center menu buttons, by position (the options button is the one
-        // away from the row).
-        let options = 0;
+        // Center menu buttons, by position: the row in the middle, and the
+        // buttons near the screen's edges (2.2081's options button, plus the
+        // side buttons 2.2091 added on both sides).
+        let leftSide = [],
+          rightSide = [];
         if (center) {
           const items = ui.children(center),
-            rowY = items.map((item) => ui.getPos(item)[1]).sort((a, b) => a - b)[Math.floor(items.length / 2)];
-          const row = items.filter((item) => Math.abs(ui.getPos(item)[1] - rowY) < 20).sort((a, b) => ui.getPos(a)[0] - ui.getPos(b)[0]);
-          options = items.find((item) => !row.includes(item)) || 0;
+            atEdge = (item) => Math.abs(ui.getPos(item)[0]) > w * 0.3,
+            middle = items.filter((item) => !atEdge(item)),
+            rowY = middle.map((item) => ui.getPos(item)[1]).sort((a, b) => a - b)[Math.floor(middle.length / 2)];
+          const row = middle.filter((item) => Math.abs(ui.getPos(item)[1] - rowY) < 20).sort((a, b) => ui.getPos(a)[0] - ui.getPos(b)[0]);
+          const byHeight = (a, b) => ui.getPos(b)[1] - ui.getPos(a)[1];
+          leftSide = items.filter((item) => atEdge(item) && ui.getPos(item)[0] < 0).sort(byHeight);
+          rightSide = items.filter((item) => !row.includes(item) && !leftSide.includes(item)).sort(byHeight);
           const play = row.reduce((best, item) => (ui.scaledSize(item)[0] > ui.scaledSize(best || item)[0] + 5 ? item : best || item), 0);
           const at = row.indexOf(play);
           if (play) ui.setID(play, "play-button");
@@ -18498,16 +18512,43 @@
         };
         const column = () => Geode.Layout.column({ gap: 5.5, align: "end", reverse: true, autoScale: true });
         const left = makeMenu("left-button-menu", 36, h / 2, 40, h - 40, column()),
-          right = makeMenu("right-button-menu", w - 36, h / 2, 40, h - 40, column());
-        makeMenu("bottom-button-menu", w / 2, 33, 400, 30, Geode.Layout.row({ gap: 4 }));
-        if (options) {
-          ui.setID(options, "options-button");
-          switchToMenu(ui, options, right);
-        }
+          right = makeMenu("right-button-menu", w - 36, h / 2, 40, h - 40, column()),
+          bottom = makeMenu("bottom-button-menu", w / 2, 33, 400, 30, Geode.Layout.row({ gap: 4 }));
+        // The options button (and 2.2091's other side buttons) go first in
+        // the side menus, so mods' buttons line up under them.
+        // Their z order keeps them first once cocos sorts the children.
+        rightSide.forEach((button, i) => {
+          ui.setID(button, i === 0 ? "options-button" : "right-side-button-" + i);
+          switchToMenu(ui, button, right);
+          ui.inv("cocos2d::CCNode::setZOrder", [button, -100 + i]);
+        });
+        leftSide.forEach((button, i) => {
+          ui.setID(button, "left-side-button-" + (i + 1));
+          switchToMenu(ui, button, left);
+          ui.inv("cocos2d::CCNode::setZOrder", [button, -100 + i]);
+        });
         ui.updateLayout(left);
         ui.updateLayout(right);
+        pauseMenus =
+          content === layer
+            ? null
+            : { content, offset: [0, 0], menus: [left, right, bottom].map((menu) => [menu, ...ui.getPos(menu)]) };
         Geode.events.send("node-ids:PauseLayer", ui, layer);
       }
+      // The added menus are on the PauseLayer (mods look for them there), so
+      // they follow the content layer when it slides away and back.
+      Geode.loader.onFrame((call) => {
+        if (!pauseMenus) return;
+        if (!game.pauseLayer) {
+          pauseMenus = null;
+          return;
+        }
+        const ui = Geode.cocos(call),
+          [dx, dy] = ui.getPos(pauseMenus.content);
+        if (dx === pauseMenus.offset[0] && dy === pauseMenus.offset[1]) return;
+        pauseMenus.offset = [dx, dy];
+        for (const [menu, x, y] of pauseMenus.menus) ui.pos(menu, x + dx, y + dy);
+      });
       // geode::cocos::switchToMenu: moves a button into another menu.
       function switchToMenu(ui, node, menu) {
         ui.retain(node);
@@ -19467,6 +19508,16 @@
               const menu = ui.getChildByID(layer, "bottom-button-menu");
               if (!menu) return;
               ui.visible(menu, true);
+              // 2.2091 shows the level's coins in this row itself; the mod's
+              // coins (with this attempt's ones flashing) replace them.
+              const content = ui.getChildByID(layer, "content-layer");
+              if (content) {
+                const [w] = ui.winSize();
+                for (const child of ui.children(content)) {
+                  const [x, y] = ui.getPos(child);
+                  if (ui.className(child) === "CCSprite" && Math.abs(y - ui.getPos(menu)[1]) < 6 && Math.abs(x - w / 2) < 120 && ui.scaledSize(child)[0] < 40) ui.visible(child, false);
+                }
+              }
               ui.setLayout(menu, Geode.Layout.row({ gap: 10, autoScale: false }), false);
               const levelID = mem.i32(level + LV.levelID),
                 coinCount = mem.i32(level + LV.coins),
