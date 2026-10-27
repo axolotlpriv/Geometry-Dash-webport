@@ -1289,6 +1289,7 @@
           "PlayLayer::removeAllCheckpoints": 0x917210,
           "GameObject::createWithKey": 0x688930,
           "PlayLayer::onExit": 0x91b550,
+          "PlayLayer::~PlayLayer": 0x903640,
           "PlayLayer::levelComplete": 0x9061b0,
           "EditorPauseLayer::onExitEditor": 0x582b90,
           "EditorPauseLayer::onExitNoSave": 0x582c80,
@@ -3737,9 +3738,12 @@
           mod.hook("PlayLayer::init", (call) => {
             level = call.arg(0);
           });
-          mod.hook("PlayLayer::onExit", (call) => {
-            if (call.arg(0) === level) level = 0;
-          });
+          // PlayLayer::onExit also runs when the game pauses.
+          for (const name of ["PlayLayer::onQuit", "PlayLayer::~PlayLayer"]) {
+            mod.hook(name, (call) => {
+              if (call.arg(0) === level) level = 0;
+            });
+          }
           mod.hook("LevelEditorLayer::create", () => {
             level = 0;
           });
@@ -4043,9 +4047,12 @@
           mod.hook("PlayLayer::init", (call) => {
             layer = call.arg(0);
           });
-          mod.hook("PlayLayer::onExit", (call) => {
-            if (call.arg(0) === layer) layer = 0;
-          });
+          // PlayLayer::onExit also runs when the game pauses.
+          for (const name of ["PlayLayer::onQuit", "PlayLayer::~PlayLayer"]) {
+            mod.hook(name, (call) => {
+              if (call.arg(0) === layer) layer = 0;
+            });
+          }
         },
       });
 
@@ -4093,9 +4100,12 @@
             state.paused = false;
             state.complete = false;
           });
-          mod.hook("PlayLayer::onExit", (call) => {
-            if (call.arg(0) === state.layer) state.layer = 0;
-          });
+          // PlayLayer::onExit also runs when the game pauses.
+          for (const name of ["PlayLayer::onQuit", "PlayLayer::~PlayLayer"]) {
+            mod.hook(name, (call) => {
+              if (call.arg(0) === state.layer) state.layer = 0;
+            });
+          }
           mod.hook("PlayLayer::pauseGame", () => {
             state.paused = true;
           });
@@ -4147,7 +4157,11 @@
             state.layer = call.arg(0);
             state.paused = state.complete = false;
           });
-          on("PlayLayer::onExit", (call) => {
+          // PlayLayer::onExit also runs when the game pauses.
+          on("PlayLayer::onQuit", (call) => {
+            if (call.arg(0) === state.layer) state.layer = 0;
+          });
+          on("PlayLayer::~PlayLayer", (call) => {
             if (call.arg(0) === state.layer) state.layer = 0;
           });
           on("PlayLayer::pauseGame", () => {
@@ -4885,12 +4899,16 @@
             call.callOriginal();
             emit("levelReady", call, layer);
           });
-          mod.hook("PlayLayer::onExit", (call) => {
-            if (call.arg(0) !== game.layer) return;
-            emit("levelExit", call, game.layer);
-            game.layer = 0;
-            game.paused = false;
-          });
+          // PlayLayer::onExit also runs when the game pauses, so leaving the
+          // level is told by onQuit (or the layer going away).
+          for (const name of ["PlayLayer::onQuit", "PlayLayer::~PlayLayer"]) {
+            mod.hook(name, (call) => {
+              if (call.arg(0) !== game.layer) return;
+              emit("levelExit", call, game.layer);
+              game.layer = 0;
+              game.paused = false;
+            });
+          }
           mod.hook("LevelEditorLayer::create", (call) => {
             call.callOriginal();
             game.editor = call.result();
@@ -23246,6 +23264,8 @@
     })();
     var Module = {
       canvas: document.getElementById("canvas"),
+      // The game's console logging (audio, HTTP), like upstream: only with ?debug.
+      __gdNoLog: /[?&]debug(=|&|$)/.test(location.search) ? 0 : 1,
       gdInputQueue: [],
       gdCursorPos: [0, 0],
       locateFile: (file) => file,
@@ -24107,6 +24127,13 @@
     var req = indexedDB.open("gdwasm_saves", 1);`,
         },
       ];
+      for (const what of ["start", "done", "fail"]) {
+        gluePatches.push({
+          name: "Quiet HTTP log (" + what + ")",
+          find: 'console.log("[http] ' + what + ' id="',
+          replace: 'if (!Module.__gdNoLog) console.log("[http] ' + what + ' id="',
+        });
+      }
       for (const patch of gluePatches.concat(window.GDModLoader ? GDModLoader.gluePatches : [])) {
         const matchCount = patchedGlue.split(patch.find).length - 1;
         if (matchCount === 1) {
