@@ -1951,7 +1951,37 @@
         }
       }
 
+      // Whether a level is open (and paused), for the page's level buttons
+      // and autosave. Not tied to any mod, so it works with every mod off.
+      const level = { layer: 0, paused: false };
+      hook("PlayLayer::init", (call) => {
+        level.layer = call.arg(0);
+        level.paused = false;
+      });
+      for (const name of ["PlayLayer::onQuit", "PlayLayer::~PlayLayer"]) {
+        hook(name, (call) => {
+          if (call.arg(0) === level.layer) {
+            level.layer = 0;
+            level.paused = false;
+          }
+        });
+      }
+      hook("PlayLayer::pauseGame", () => {
+        level.paused = true;
+      });
+      for (const name of ["PlayLayer::resume", "PlayLayer::resumeAndRestart"]) {
+        hook(name, () => {
+          level.paused = false;
+        });
+      }
+
       return {
+        get inLevel() {
+          return !!level.layer;
+        },
+        get levelPaused() {
+          return !!level.layer && level.paused;
+        },
         addresses,
         profile: {
           start() {
@@ -23674,9 +23704,14 @@
         }
       }
     }
-    // "playing", "paused" or "none", judged from the level song (any long
-    // track other than the menu loop). Used to tell gameplay from menus.
+    // "playing", "paused" or "none": from the mod loader's PlayLayer hooks,
+    // or (if the loader couldn't patch the game) judged from the level song
+    // (any long track other than the menu loop). Tells gameplay from menus.
     function levelMusicState() {
+      const loader = window.GDModLoader;
+      if (loader && loader.ready && !loader.loadErrors.length) {
+        return loader.inLevel ? (loader.levelPaused ? "paused" : "playing") : "none";
+      }
       const audio = window.Module && Module.__gdAudio;
       let state = "none";
       if (!audio) {
@@ -24796,18 +24831,22 @@
         }
         openKeybinds();
       });
-      // The buttons only show during a level: menus use the top-right corner
-      // for their own buttons. Hiding waits a few seconds so the buttons
+      // The buttons only show during a level (menus use the top-right corner
+      // for their own buttons). Without the mod loader's level hooks, the
+      // level song tells, and hiding waits a few seconds so the buttons
       // don't flicker while the song restarts after a death.
       const hud = document.getElementById("gd-hud");
       let lastInLevelAt = 0;
       setInterval(() => {
-        if (window.__gdInputReady && levelMusicState() !== "none") {
+        const state = window.__gdInputReady ? levelMusicState() : "none",
+          loader = window.GDModLoader,
+          exact = loader && loader.ready && !loader.loadErrors.length;
+        if (state !== "none") {
           lastInLevelAt = Date.now();
         }
-        hud.hidden = Date.now() - lastInLevelAt > 3000;
+        hud.hidden = exact ? state === "none" : Date.now() - lastInLevelAt > 3000;
         placeFullscreenButton();
-      }, 250);
+      }, 150);
       // Fullscreen button, shown whenever the page isn't fullscreen (and the
       // browser can do fullscreen at all; iPhones can't).
       const fullscreenButton = document.getElementById("gd-fullscreen"),
