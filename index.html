@@ -9572,7 +9572,12 @@
     // WebRTC. If that player leaves, the next one takes over and the rooms are
     // rebuilt from what each player reports when reconnecting.
     (function () {
-      const PEERJS_URL = "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js",
+      // The same PeerJS build from three CDNs (some networks block one).
+      const PEERJS_URLS = [
+          "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js",
+          "https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js",
+          "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js",
+        ],
         // ?globed-server=name gives a group (or a test) a server of its own.
         SERVER_ID = "gdwebport-globed-v2-server" + (/^[\w-]{1,32}$/.test(new URLSearchParams(location.search).get("globed-server") || "") ? "-" + new URLSearchParams(location.search).get("globed-server") : ""),
         PROTOCOL = 2,
@@ -9684,15 +9689,20 @@
       function loadPeerJs() {
         if (window.Peer) return Promise.resolve();
         if (!peerJsPromise) {
-          peerJsPromise = new Promise((resolve, reject) => {
-            const script = document.createElement("script");
-            script.src = PEERJS_URL;
-            script.onload = () => resolve();
-            script.onerror = () => {
-              peerJsPromise = null;
-              reject(new Error("Could not load the networking library"));
-            };
-            document.head.appendChild(script);
+          const load = (url) =>
+            new Promise((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = url;
+              script.onload = () => (window.Peer ? resolve() : reject());
+              script.onerror = () => {
+                script.remove();
+                reject();
+              };
+              document.head.appendChild(script);
+            });
+          peerJsPromise = PEERJS_URLS.reduce((tried, url) => tried.catch(() => load(url)), Promise.reject()).catch(() => {
+            peerJsPromise = null;
+            throw new Error("Could not load the networking library");
           });
         }
         return peerJsPromise;
