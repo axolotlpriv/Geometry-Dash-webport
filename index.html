@@ -3303,6 +3303,12 @@
         name: "Jukebox song override",
         find: "        var data = null;\n        var cands = this.candidates(path);",
         replace: "        var data = window.__gdSongOverride ? window.__gdSongOverride(path) : null;\n        var cands = this.candidates(path);",
+      }, {
+        // 2.2091 reads songs itself and hands the bytes over here. A copy,
+        // since decoding detaches the buffer.
+        name: "Jukebox song override (song data)",
+        find: "    var bytes = HEAPU8.slice(p, end);\n    var done = function(buf) {",
+        replace: "    var bytes = HEAPU8.slice(p, end);\n    var nong = window.__gdSongOverride && window.__gdSongOverride(s.name);\n    if (nong) bytes = new Uint8Array(nong);\n    var done = function(buf) {",
       });
       window.__gdSongOverride = function (path) {
         const file = String(path).split(/[\\/]/).pop();
