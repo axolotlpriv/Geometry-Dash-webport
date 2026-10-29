@@ -3967,7 +3967,8 @@
         engine.play = function (soundId, groupId, paused) {
           const sound = this.sounds[soundId],
             choice = mod.enabled ? mod.settings.deathSound : "default";
-          if (choice !== "default" && sound && DEATH_SOUND.test(String(sound.path || ""))) {
+          // Sounds 2.2091 loads itself carry a name instead of a path.
+          if (choice !== "default" && sound && DEATH_SOUND.test(String(sound.path || sound.name || ""))) {
             const id = play.call(this, soundId, groupId, true);
             this.channels[id].ended = 1;
             if (choice === "custom" && custom.death && this.ctx) {
@@ -7088,7 +7089,7 @@
         const play = audio.play;
         audio.play = function (soundId, groupId, paused) {
           const sound = this.sounds[soundId];
-          if (game.dead && on("player.muterewardssfx") && sound && REWARD_SOUND.test(String(sound.path || ""))) {
+          if (game.dead && on("player.muterewardssfx") && sound && REWARD_SOUND.test(String(sound.path || sound.name || ""))) {
             const id = play.call(this, soundId, groupId, true);
             this.channels[id].ended = 1;
             return id;
