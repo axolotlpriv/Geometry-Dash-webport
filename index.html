@@ -9573,10 +9573,16 @@
     // rebuilt from what each player reports when reconnecting.
     (function () {
       const PEERJS_URL = "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js",
-        SERVER_ID = "gdwebport-globed-v2-server",
+        // ?globed-server=name gives a group (or a test) a server of its own.
+        SERVER_ID = "gdwebport-globed-v2-server" + (/^[\w-]{1,32}$/.test(new URLSearchParams(location.search).get("globed-server") || "") ? "-" + new URLSearchParams(location.search).get("globed-server") : ""),
         PROTOCOL = 2,
         CONNECT_TIMEOUT = 10000,
         PING_INTERVAL = 2000,
+        // WebRTC doesn't always report a peer that vanished (closed tab,
+        // sleeping laptop, lost network), so silence counts as gone: the
+        // server answers every ping, and clients ping every 2 seconds.
+        SERVER_SILENCE_MS = 8000,
+        CLIENT_SILENCE_MS = 20000,
         ROOM_PAGE_SIZE = 50;
 
       function defaultSettings() {
@@ -9669,7 +9675,10 @@
         server = null,
         wantConnected = false,
         pingTimer = 0,
-        joining = false;
+        lastServerMessage = 0,
+        retryTimer = 0,
+        retryCount = 0,
+        joinGeneration = 0;
 
       let peerJsPromise = null;
       function loadPeerJs() {
@@ -9709,43 +9718,67 @@
       }
 
       async function connect() {
-        if (net.state !== "disconnected") return;
+        if (net.state !== "disconnected" && !retryTimer) return;
+        clearTimeout(retryTimer);
+        retryTimer = 0;
         wantConnected = true;
         setState("connecting", "Connecting...");
         try {
           await loadPeerJs();
-          peer = await openPeer();
+          const opened = await openPeer();
+          if (!wantConnected) {
+            opened.destroy();
+            return;
+          }
+          peer = opened;
           peer.on("error", (error) => {
             if (error.type !== "peer-unavailable") console.warn("[globed] peer error", error.type, error.message);
           });
           peer.on("disconnected", () => {
-            if (wantConnected && peer && !peer.destroyed) peer.reconnect();
+            if (wantConnected && peer === opened && !opened.destroyed) opened.reconnect();
+          });
+          // The signaling connection is gone for good: start over.
+          peer.on("close", () => {
+            if (peer === opened && wantConnected) restart("Connection lost");
           });
           net.myId = peer.id;
+          retryCount = 0;
           await joinServer();
         } catch (connectError) {
           console.warn("[globed] connect failed", connectError);
-          disconnect(connectError.message || String(connectError));
+          if (wantConnected) restart(connectError.message || String(connectError));
+          else disconnect(connectError.message || String(connectError));
         }
       }
-
-      async function joinServer() {
-        if (joining) return;
-        joining = true;
-        try {
-          for (let attempt = 0; wantConnected; attempt++) {
-            setState("connecting", attempt ? "Reconnecting..." : "Connecting...");
-            const result = await tryConnect();
-            if (result === "ok" || !wantConnected) return;
-            if (result === "absent" && (await tryBecomeServer())) return;
-            await sleep(400 + Math.random() * (attempt ? 2000 : 800));
+      // Keep trying (with growing waits) until connected or cancelled.
+      function restart(reason) {
+        teardown();
+        const wait = Math.min(30000, 2000 * 2 ** Math.min(retryCount++, 4));
+        setState("connecting", "Retrying in " + Math.round(wait / 1000) + "s (" + reason + ")");
+        retryTimer = setTimeout(() => {
+          retryTimer = 0;
+          if (wantConnected) {
+            net.state = "disconnected";
+            connect();
           }
-        } finally {
-          joining = false;
+        }, wait);
+      }
+
+      // Finds the server (or becomes it). A newer call supersedes an older
+      // one still waiting, so only one attempt is ever in flight.
+      async function joinServer() {
+        const generation = ++joinGeneration,
+          current = () => wantConnected && generation === joinGeneration && !!peer && !peer.destroyed;
+        for (let attempt = 0; current(); attempt++) {
+          setState("connecting", attempt ? "Reconnecting..." : "Connecting...");
+          const result = await tryConnect(current);
+          if (result === "ok" || !current()) return;
+          if (result === "absent" && (await tryBecomeServer(current))) return;
+          await sleep(400 + Math.random() * (attempt ? 2000 : 800));
         }
       }
 
-      function tryConnect() {
+      function tryConnect(current) {
         return new Promise((resolve) => {
           const conn = peer.connect(SERVER_ID, { reliable: true });
           let done = false;
@@ -9763,22 +9796,40 @@
           const timer = setTimeout(() => finish("timeout"), CONNECT_TIMEOUT);
           peer.on("error", onError);
           conn.once("open", () => {
+            if (!current()) {
+              finish("stale");
+              return;
+            }
             finish("ok");
             serverConn = conn;
-            conn.on("data", (msg) => msg && typeof msg === "object" && handle(msg));
+            lastServerMessage = performance.now();
+            conn.on("data", (msg) => {
+              lastServerMessage = performance.now();
+              if (msg && typeof msg === "object") handle(msg);
+            });
             conn.on("close", () => serverLost(conn));
             conn.on("error", () => serverLost(conn));
+            const pc = conn.peerConnection;
+            if (pc) {
+              pc.addEventListener("connectionstatechange", () => {
+                if (pc.connectionState === "failed" || pc.connectionState === "closed") serverLost(conn);
+              });
+            }
             sendHello();
           });
         });
       }
 
-      async function tryBecomeServer() {
+      async function tryBecomeServer(current) {
         let serverPeer;
         try {
           serverPeer = await openPeer(SERVER_ID);
         } catch (claimError) {
           return false; // someone else got there first
+        }
+        if (!current()) {
+          serverPeer.destroy();
+          return false;
         }
         server = createServer(serverPeer);
         net.isServer = true;
@@ -9790,6 +9841,9 @@
         if (serverConn !== conn) return;
         serverConn = null;
         stopPing();
+        try {
+          conn.close();
+        } catch (closeError) {}
         if (wantConnected) joinServer();
       }
 
@@ -9811,7 +9865,14 @@
 
       function startPing() {
         stopPing();
-        pingTimer = setInterval(() => send({ t: "ping", ts: performance.now() }), PING_INTERVAL);
+        pingTimer = setInterval(() => {
+          if (serverConn && performance.now() - lastServerMessage > SERVER_SILENCE_MS) {
+            console.warn("[globed] the server stopped answering; reconnecting");
+            serverLost(serverConn);
+            return;
+          }
+          send({ t: "ping", ts: performance.now() });
+        }, PING_INTERVAL);
         send({ t: "ping", ts: performance.now() });
       }
       function stopPing() {
@@ -9821,6 +9882,17 @@
 
       function disconnect(reason = "") {
         wantConnected = false;
+        clearTimeout(retryTimer);
+        retryTimer = 0;
+        retryCount = 0;
+        teardown();
+        net.room = emptyRoom();
+        net.myId = "";
+        net.ping = -1;
+        emit("roomState", net.room);
+        setState("disconnected", reason);
+      }
+      function teardown() {
         stopPing();
         if (server) {
           server.destroy();
@@ -9835,16 +9907,12 @@
           } catch (closeError) {}
         }
         if (peer) {
-          try {
-            peer.destroy();
-          } catch (destroyError) {}
+          const old = peer;
           peer = null;
+          try {
+            old.destroy();
+          } catch (destroyError) {}
         }
-        net.room = emptyRoom();
-        net.myId = "";
-        net.ping = -1;
-        emit("roomState", net.room);
-        setState("disconnected", reason);
       }
 
       function handle(msg) {
@@ -9898,19 +9966,53 @@
           conn.on("data", (msg) => {
             if (!msg || typeof msg !== "object") return;
             let session = sessions.get(conn.peer);
-            if (!session) {
+            if (!session || session.conn !== conn) {
               if (msg.t !== "hello") return;
               session = { id: conn.peer, send: (out) => conn.open && conn.send(out), conn };
             }
+            session.lastSeen = performance.now();
             receive(session, msg);
           });
           const drop = () => {
             const session = sessions.get(conn.peer);
             if (session && session.conn === conn) removeSession(session);
+            try {
+              conn.close();
+            } catch (closeError) {}
           };
           conn.on("close", drop);
           conn.on("error", drop);
+          const pc = conn.peerConnection;
+          if (pc) {
+            pc.addEventListener("connectionstatechange", () => {
+              if (pc.connectionState === "failed" || pc.connectionState === "closed") drop();
+            });
+          }
         });
+        // Players whose browser went away without closing the connection.
+        const sweep = setInterval(() => {
+          const now = performance.now();
+          for (const session of [...sessions.values()]) {
+            if (!session.conn || now - (session.lastSeen || now) < CLIENT_SILENCE_MS) continue;
+            removeSession(session);
+            try {
+              session.conn.close();
+            } catch (closeError) {}
+          }
+          // An owner who hasn't come back hands the room on, like Globed.
+          for (const room of rooms.values()) {
+            if (!room.id || sessions.has(room.owner) || !room.members.size) {
+              room.ownerAwaySince = 0;
+              continue;
+            }
+            if (!room.ownerAwaySince) room.ownerAwaySince = now;
+            else if (now - room.ownerAwaySince > 30000) {
+              room.owner = room.members.values().next().value;
+              room.ownerAwaySince = 0;
+              markDirty(room);
+            }
+          }
+        }, 4000);
         serverPeer.on("disconnected", () => {
           if (!destroyed && !serverPeer.destroyed) serverPeer.reconnect();
         });
@@ -9936,6 +10038,7 @@
         function destroy() {
           destroyed = true;
           clearInterval(heartbeat);
+          clearInterval(sweep);
           for (const session of sessions.values()) {
             if (session.conn) {
               try {
@@ -10291,6 +10394,29 @@
           destroy,
         };
       }
+
+      // A frozen page (a backgrounded phone tab, the back/forward cache)
+      // can't serve anyone: give the server ID up so another player takes
+      // over at once, and find the server again on return.
+      function suspend() {
+        if (!server) return;
+        server.destroy();
+        server = null;
+        net.isServer = false;
+        joinGeneration++;
+      }
+      function wake() {
+        if (!wantConnected || server || (serverConn && serverConn.open)) return;
+        if (!peer || peer.destroyed) restart("Resumed");
+        else {
+          if (peer.disconnected) peer.reconnect();
+          joinServer();
+        }
+      }
+      document.addEventListener("freeze", suspend);
+      window.addEventListener("pagehide", (event) => event.persisted && suspend());
+      document.addEventListener("resume", wake);
+      window.addEventListener("pageshow", (event) => event.persisted && wake());
 
       window.GlobedNet = net;
     })();
