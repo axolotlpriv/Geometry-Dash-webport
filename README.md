@@ -8,7 +8,7 @@
 
 ## Play Online
 
-**[Play Geometry Dash](https://gd-webport.pages.dev/)**
+**[Play Geometry Dash](https://gdwebport.pages.dev/)**
 
 Open the link, wait for the game to load, and start playing.
 
@@ -16,13 +16,13 @@ The first load requires an Internet connection. To play offline, download index.
 
 ## Updating
 
-The online version is updated whenever changes are published. Reload the page to get the latest version. If the changes don't appear, press `Ctrl + F5`.
+The online version is updated whenever changes are published.
 
 ### Using a downloaded copy?
 
 Downloaded files and forks don't update automatically. To get the latest version, you can:
 
-* **Play online:** Open the [webport](https://gd-webport.pages.dev/).
+* **Play online:** Open the [webport](https://gdwebport.pages.dev/).
 * **Download the latest file:** Open [index.html](index.html) in this repository, click the download icon, and open the file in your browser.
 
 The version update notice is only displayed when an Internet connection is available.
@@ -56,7 +56,7 @@ The game can also be played on mobile phones and tablets. Tap to jump, drag to s
 | --------------------- | --------------------- |
 | Name                  | Geometry Dash webport |
 | Type                  | Webport / HTML        |
-| Geometry Dash version | 2.2081                |
+| Geometry Dash version | 2.2091                |
 | Platform              | Web browser           |
 | Technologies          | HTML5, JavaScript     |
 
@@ -75,7 +75,7 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 | --- | --- |
 | Eclipse Menu | The Eclipse mod menu with its own interface: about 150 hacks and options, labels, a replay bot, a recorder and keybinds. See below. |
 | Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
-| Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
+| Jukebox | Replace any song with a NONG, like the real Jukebox: click the disc above a song's name for its NONG list, where you can download NONGs from Song File Hub (verified ones get a gold disc), add your own file or link (with a start offset), and switch, edit or delete them. Main level songs can also be changed from the mod's settings page. |
 | FPS & Visuals | Unlock or cap the frame rate, render resolution, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
 | Extra LDM | Low detail mode on every level, and optionally no decorations, glow, particles, pulsing or shader effects, so busy levels run faster. |
 | Click Sounds | A click sound (built-in or your own file) every time you click in a level, plus a custom or muted death sound. |
@@ -90,7 +90,7 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 
 Press the **Globed** button (the globe next to the settings buttons) on the main menu and **Connect**. Everyone online starts in the Global Room; use **Create Room** or **Join Room** to play with friends, or share your room's ID (click the room name to copy it). When you're in the same level as someone in your room, you see their icon and name, and their progress under the progress bar. The room owner can turn on **Death Link** in the room settings: when anyone dies, everyone in the level dies. Hold `V` to talk in voice chat (your browser asks for your microphone the first time) and press `B` to deafen; in platformer levels, players further away are quieter. In the pause menu, **Emotes** shows an emote above your icon (you can put favorites on keys in the Globed mod settings) and **Players** lists everyone in the level.
 
-Globed's servers only accept the desktop mod, so the web port runs its own server: the first player to connect hosts it in their browser, and if they leave, someone else takes over automatically. This means you can only play with other people using the webport, and the other players (and whoever hosts the server) can see your IP address. Features that need Globed's own servers (moderation, featured levels, Discord roles) aren't either.
+Globed's servers only accept the desktop mod, so the web port runs its own server: the first player to connect hosts it in their browser, and if they leave (or their browser stops answering), someone else takes over within a few seconds and everyone reconnects to them, keeping their rooms. If the connection can't be made, Globed keeps retrying until it works or you press the cancel button. To play on a server of your own (for example with a group of friends), everyone opens the game with `?globed-server=` and the same name at the end of the address, like `https://gdwebport.pages.dev/?globed-server=myfriends`. This means you can only play with other people using the webport, and the other players (and whoever hosts the server) can see your IP address. Features that need Globed's own servers (moderation, featured levels, Discord roles) aren't either.
 
 The room game modes all turn on safe mode in the level, like in Globed:
 
@@ -149,6 +149,8 @@ These Geode mods are ported to Geode Web, following each mod's own source code:
 | [Custom Icon Size](https://github.com/abb2k/Custom-icon-size) | abb2k | Change the size of your icon in levels. |
 | [Chest Alert](https://github.com/lilnibblit/Chest-Alert) | dotnet | A "!" on the daily chest button when a chest is ready. |
 
+The ports follow each mod's 2.2081 release (none of them has a 2.2091 release yet), adjusted to 2.2091's layout where needed, for example the pause menu's new side buttons. Geode's mod index only lists the few mods that already have 2.2091 releases, so the Download and Featured tabs are short for now.
+
 Some things work differently on the web: settings and saved data are kept in your browser; "open folder" and file settings use your browser's file picker or an in-page editor; Restart Buttons reloads the page; and parts that need the desktop game or other desktop mods (more icons, separate dual icons, DLLs) are left out.
 
 ## Troubleshooting
@@ -169,7 +171,7 @@ If the problem continues, it could be related to your browser or the service hos
 
 ## Offline Mode and Limitations
 
-Offline mode applies only to the downloaded `index.html` file opened directly from your device's storage. It does not apply to the online version hosted on GitHub Pages, which always requires an Internet connection.
+Offline mode applies only to the downloaded `index.html` file opened directly from your device's storage. It does not apply to the online version hosted on Cloudflare Pages, which always requires an Internet connection.
 
 Keep these limitations in mind:
 
