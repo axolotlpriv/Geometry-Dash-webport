@@ -1121,6 +1121,7 @@
           "GameStatsManager::setStarsForMapPack": 0x6e2970,
           "GameStatsManager::awardSecretKey": 0x6f65e0,
           "GJBaseGameLayer::updateDebugDraw": 0x7169c0,
+          "PlayLayer::shouldDrawDebugHitboxes": 0x905bc0,
           "MusicDownloadManager::isSongDownloaded": 0x8845a0,
           "LevelTools::getAudioFileName": 0x8633d0,
           "LevelTools::getAudioTitle": 0x862870,
@@ -2352,6 +2353,7 @@
         callbacks = new Map(),
         sliders = new Map(),
         slotLayouts = new Map(),
+        rgbaKinds = new Map(),
         thisOffsets = new Map();
 
       // Buttons made here use MenuLayer::onFacebook as their selector; the
@@ -2607,14 +2609,19 @@
           },
           rgba(node, method, args) {
             const vtable = mem.ptr(node),
-              kinds = ["cocos2d::extension::CCScale9Sprite::", "cocos2d::CCLabelBMFont::", "cocos2d::CCLayerColor::", "cocos2d::CCSprite::"];
-            for (const kind of kinds) {
+              key = vtable + ":" + method,
+              known = rgbaKinds.get(key);
+            if (known) return known === "virtual" ? ui.virtualCall("cocos2d::CCSprite::" + method, node, args) : vcall(known + method, node, args);
+            for (const kind of ["cocos2d::extension::CCScale9Sprite::", "cocos2d::CCLabelBMFont::", "cocos2d::CCLayerColor::", "cocos2d::CCSprite::"]) {
               try {
-                return vcall(kind + method, node, args);
+                const result = vcall(kind + method, node, args);
+                rgbaKinds.set(key, kind);
+                return result;
               } catch (lookupError) {
                 // not this kind of node
               }
             }
+            rgbaKinds.set(key, "virtual");
             // A CCSprite subclass that overrides the method (ButtonSprite...):
             // call through its vtable like C++ would.
             return ui.virtualCall("cocos2d::CCSprite::" + method, node, args);
@@ -7663,6 +7670,11 @@
         call.invoke("cocos2d::CCNode::setVisible", [debugNode, 1]);
         if (value("level.showhitboxes.hideplayer", false)) for (const [, , p] of playerPositions) call.invoke("cocos2d::CCNode::setVisible", [p, 0]);
       }, () => on("level.showhitboxes") && (!!game.layer || !!game.editor));
+      // A level only draws its hitboxes in practice mode (or after a death
+      // with the game's "hitboxes on death" option).
+      mod.hook("PlayLayer::shouldDrawDebugHitboxes", (call) => {
+        if (call.arg(0) === game.layer && hitboxesWanted(call.arg(0))) call.skip(1);
+      }, () => on("level.showhitboxes") && !!game.layer);
       E.on("reset", () => (trail.length = 0));
 
       // Recolor what the game draws: categories come from the game's own
@@ -9033,6 +9045,8 @@
         const ui = loader.cocos(call);
         ensureFont();
         if (container) ui.remove(container);
+        applied = new Map();
+        winSize = null;
         container = ui.node();
         ui.add(layer, container, 1001);
         nodes = new Map();
@@ -9041,7 +9055,10 @@
         nodesDirty = true;
       }
       function rebuildNodes(ui) {
-        for (const entry of nodes.values()) ui.remove(entry.node);
+        for (const entry of nodes.values()) {
+          ui.remove(entry.node);
+          applied.delete(entry.node);
+        }
         nodes = new Map();
         for (const label of labels()) {
           const font = FONTS[label.font] || "bigFont.fnt",
@@ -9052,27 +9069,52 @@
         }
         nodesDirty = false;
       }
+      // Every setter is a call into the game, so labels only get the ones
+      // whose value changed since the last frame.
+      let applied = new Map();
+      function apply(ui, node, key, value, set) {
+        let state = applied.get(node);
+        if (!state) applied.set(node, (state = {}));
+        const id = Array.isArray(value) ? value.join(",") : value;
+        if (state[key] === id) return;
+        state[key] = id;
+        set(ui, node, value);
+      }
+      const setVisible = (ui, node, v) => ui.visible(node, v),
+        setScale = (ui, node, v) => ui.scale(node, v),
+        setColor = (ui, node, v) => ui.color(node, v),
+        setOpacity = (ui, node, v) => ui.opacity(node, v),
+        setAnchor = (ui, node, v) => ui.anchor(node, v[0], v[1]),
+        setPos = (ui, node, v) => ui.pos(node, v[0], v[1]);
+      let winSize = null,
+        winSizeAt = 0;
       function drawLabels(call) {
         const ui = loader.cocos(call),
           layer = game.layer;
         if (!container) return;
         const show = on("labels.visible") && (layer || on("labels.show-in-editor"));
-        ui.visible(container, !!show);
+        apply(ui, container, "visible", !!show, setVisible);
         if (!show) return;
         if (nodesDirty) rebuildNodes(ui);
+        // The window size only changes when the browser window does.
+        const now = performance.now();
+        if (!winSize || now - winSizeAt > 1000) {
+          winSize = ui.winSize();
+          winSizeAt = now;
+        }
         const vars = variables(call),
-          [width, height] = ui.winSize(),
+          [width, height] = winSize,
           margin = 3,
           stacks = new Array(9).fill(0);
         // Cheat indicator.
         const cheating = E.isCheating(),
           showIndicator = on("labels.cheat-indicator.visible") && (!value("labels.cheat-indicator.only-cheating", false) || cheating) && (!game.complete || value("labels.cheat-indicator.endscreen", true));
-        ui.visible(indicator, showIndicator);
+        apply(ui, indicator, "visible", !!showIndicator, setVisible);
         if (showIndicator) {
           const align = value("labels.cheat-indicator.alignment", 0);
-          ui.scale(indicator, value("labels.cheat-indicator.scale", 0.5));
-          ui.color(indicator, cheating ? [255, 0, 0] : E.safeModeActive && E.safeModeActive() ? [255, 170, 0] : [0, 255, 0]);
-          ui.opacity(indicator, Math.round(255 * value("labels.cheat-indicator.opacity", 0.35)));
+          apply(ui, indicator, "scale", value("labels.cheat-indicator.scale", 0.5), setScale);
+          apply(ui, indicator, "color", cheating ? [255, 0, 0] : E.safeModeActive && E.safeModeActive() ? [255, 170, 0] : [0, 255, 0], setColor);
+          apply(ui, indicator, "opacity", Math.round(255 * value("labels.cheat-indicator.opacity", 0.35)), setOpacity);
           stacks[align] += place(ui, indicator, align, stacks[align], [0, 0], width, height, margin);
         }
         for (const label of labels()) {
@@ -9092,18 +9134,18 @@
           });
           let text = visible ? safe(() => compileTemplate(label.text || "")(vars)) : "";
           if (!text.trim()) visible = false;
-          ui.visible(entry.node, visible);
+          apply(ui, entry.node, "visible", visible, setVisible);
           if (!visible) continue;
           if (text !== entry.text) {
             entry.text = text;
             ui.setText(entry.node, text);
           }
-          ui.scale(entry.node, scale);
-          ui.color(entry.node, color.slice(0, 3).map((v) => Math.round(v * 255)));
-          ui.opacity(entry.node, Math.round(255 * opacity));
+          apply(ui, entry.node, "scale", scale, setScale);
+          apply(ui, entry.node, "color", color.slice(0, 3).map((v) => Math.round(v * 255)), setColor);
+          apply(ui, entry.node, "opacity", Math.round(255 * opacity), setOpacity);
           if (label.absolute) {
-            ui.anchor(entry.node, [0, 0.5, 1][label.fontAlignment || 0], 0.5);
-            ui.pos(entry.node, label.offset[0], label.offset[1]);
+            apply(ui, entry.node, "anchor", [[0, 0.5, 1][label.fontAlignment || 0], 0.5], setAnchor);
+            apply(ui, entry.node, "pos", [label.offset[0], label.offset[1]], setPos);
           } else {
             const align = label.alignment || 0;
             stacks[align] += place(ui, entry.node, align, stacks[align], label.offset || [0, 0], width, height, margin);
@@ -9112,19 +9154,32 @@
       }
       // Stack a label in its corner; returns the height it takes.
       function place(ui, node, align, used, offset, width, height, margin) {
-        const [, h] = ui.scaledSize(node),
+        // The height only changes with the text or the scale.
+        const state = applied.get(node),
+          sizeKey = state.scale + "|" + (nodeText(node) ?? "");
+        if (state.sizeKey !== sizeKey) {
+          state.sizeKey = sizeKey;
+          state.height = ui.scaledSize(node)[1];
+        }
+        const h = state.height,
           col = align % 3,
           row = Math.floor(align / 3),
           x = col === 0 ? margin : col === 1 ? width / 2 : width - margin,
           y = row === 0 ? height - margin - used : row === 1 ? height / 2 - used : margin + used;
-        ui.anchor(node, col / 2, row === 0 ? 1 : row === 2 ? 0 : 0.5);
-        ui.pos(node, x + offset[0], y + offset[1]);
+        apply(ui, node, "anchor", [col / 2, row === 0 ? 1 : row === 2 ? 0 : 0.5], setAnchor);
+        apply(ui, node, "pos", [x + offset[0], y + offset[1]], setPos);
         return h + 1;
+      }
+      function nodeText(node) {
+        for (const entry of nodes.values()) if (entry.node === node) return entry.text;
+        return null;
       }
       E.on("levelReady", (call, layer) => setupNodes(call, layer));
       E.on("levelExit", () => {
         container = 0;
         nodes = new Map();
+        applied = new Map();
+        winSize = null;
       });
       E.on("postUpdate", (call) => drawLabels(call));
       // While paused the level doesn't update, but labels should.
@@ -21630,7 +21685,10 @@
           mod.setSavedValue("version", 1);
         }
         const color = (key) => setting(key);
-        let timeScale = 1;
+        // GJBaseGameLayer::applyTimeWarp stores the level's time warp here
+        // (Inputs Viewer hooks it; reading the field costs nothing per step).
+        const TIME_WARP = 0x338;
+        const timeWarp = () => (game.playLayer && mem.f32(game.playLayer + TIME_WARP)) || 1;
         // Real-time CPS counts drop one second after each click.
         const pendingDrops = [];
 
@@ -21696,7 +21754,7 @@
               s.clicksPerSecond++;
               if (setting("cps-calculation") !== "Per Second") {
                 s.displayedCPS = s.clicksPerSecond;
-                pendingDrops.push({ sprite: s, at: performance.now() + timeScale * 1000 });
+                pendingDrops.push({ sprite: s, at: performance.now() + timeWarp() * 1000 });
                 s.updateCPS(k);
               }
             }
@@ -21874,7 +21932,7 @@
               for (const p of [v.p1, v.p2])
                 for (const s of p.sprites) {
                   if (now < s.perSecondAt) continue;
-                  s.perSecondAt = now + timeScale * 1000;
+                  s.perSecondAt = now + timeWarp() * 1000;
                   s.displayedCPS = s.clicksPerSecond;
                   s.clicksPerSecond = 0;
                   s.updateCPS(kit());
@@ -21908,14 +21966,6 @@
             const [w, h] = ui.winSize();
             ui.pos(fields.ivLayer.node, w / 2, h / 2);
             ui.add(uiLayer, fields.ivLayer.node);
-          },
-          applyTimeWarp(self) {
-            self.orig();
-            const timeWarp = self.float(1);
-            if (self.fields.currentTimeWarp !== timeWarp) {
-              self.fields.currentTimeWarp = timeWarp;
-              timeScale = timeWarp; // TimeWarpEvent
-            }
           },
         });
         function onButton(self, down) {
