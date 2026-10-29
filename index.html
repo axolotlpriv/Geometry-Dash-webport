@@ -12782,6 +12782,18 @@
           buttons.push(ui.button(emotes, (k) => window.GlobedEmotes.openList(k)));
         }
         if (window.GlobedModes) buttons.push(...window.GlobedModes.pauseButtons(ui));
+        // In Geode mode the pause menu's right side is Node IDs' column (the
+        // game's own 2.2091 side buttons are in it); Globed's go there too,
+        // as in the desktop mod.
+        const geode = window.GeodeWebMode && window.GeodeWebMode.active && window.Geode,
+          gui = geode && Geode.cocos(call),
+          right = gui && gui.getChildByIDRecursive(layer, "right-button-menu");
+        if (right) {
+          ["player-list-button", "emotes-button", "switcheroo-button"].forEach((id, i) => buttons[i] && gui.setID(buttons[i], "dankmeme.globed2/" + id));
+          buttons.forEach((item) => gui.add(right, item));
+          gui.updateLayout(right);
+          return;
+        }
         columnUp(ui, buttons, w - 52, 24, 0);
         buttons.forEach((item) => ui.add(menu, item));
         ui.add(layer, menu, 10);
@@ -19807,8 +19819,10 @@
               // columns instead of shrinking when they get full.
               const right = ui.getChildByID(layer, "right-button-menu"),
                 left = ui.getChildByID(layer, "left-button-menu");
-              if (right) Geode.Layout.set(right, Geode.Layout.column({ gap: 5, reverse: true, grow: true, align: "end", autoScale: false }));
-              if (left) Geode.Layout.set(left, Geode.Layout.column({ gap: 4, reverse: true, grow: true, crossReverse: true, align: "end", autoScale: false }));
+              // Extra columns go toward the middle of the screen: leftwards
+              // from the right edge, rightwards from the left one.
+              if (right) Geode.Layout.set(right, Geode.Layout.column({ gap: 5, reverse: true, grow: true, crossReverse: true, crossAlign: "end", align: "end", autoScale: false }));
+              if (left) Geode.Layout.set(left, Geode.Layout.column({ gap: 4, reverse: true, grow: true, crossAlign: "start", align: "end", autoScale: false }));
               if (right) ui.updateLayout(right);
               if (left) ui.updateLayout(left);
             },
