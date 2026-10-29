@@ -18710,8 +18710,10 @@
             rowY = middle.map((item) => ui.getPos(item)[1]).sort((a, b) => a - b)[Math.floor(middle.length / 2)];
           const row = middle.filter((item) => Math.abs(ui.getPos(item)[1] - rowY) < 20).sort((a, b) => ui.getPos(a)[0] - ui.getPos(b)[0]);
           const byHeight = (a, b) => ui.getPos(b)[1] - ui.getPos(a)[1];
+          // Only buttons at the edges: 2.2091's StartPos row (arrows, list
+          // and add buttons in practice or test mode) stays where it is.
           leftSide = items.filter((item) => atEdge(item) && ui.getPos(item)[0] < 0).sort(byHeight);
-          rightSide = items.filter((item) => !row.includes(item) && !leftSide.includes(item)).sort(byHeight);
+          rightSide = items.filter((item) => atEdge(item) && ui.getPos(item)[0] > 0 && !row.includes(item)).sort(byHeight);
           const play = row.reduce((best, item) => (ui.scaledSize(item)[0] > ui.scaledSize(best || item)[0] + 5 ? item : best || item), 0);
           const at = row.indexOf(play);
           if (play) ui.setID(play, "play-button");
