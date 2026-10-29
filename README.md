@@ -75,7 +75,7 @@ The webport has its own mod loader with these mods built in. Open the mod list w
 | --- | --- |
 | Eclipse Menu | The Eclipse mod menu with its own interface: about 150 hacks and options, labels, a replay bot, a recorder and keybinds. See below. |
 | Click Between Frames | Clicks count at the moment you press instead of at the start of the next frame, so they land on the right physics step. |
-| Jukebox | Replace any song with a NONG, either an MP3 from your device or a download from Song File Hub. |
+| Jukebox | Replace any song with a NONG, like the real Jukebox: click the disc above a song's name for its NONG list, where you can download NONGs from Song File Hub (verified ones get a gold disc), add your own file or link (with a start offset), and switch, edit or delete them. Main level songs can also be changed from the mod's settings page. |
 | FPS & Visuals | Unlock or cap the frame rate, render resolution, an FPS counter, anti-aliasing, brightness, contrast and saturation, sharp scaling and no camera shake. |
 | Extra LDM | Low detail mode on every level, and optionally no decorations, glow, particles, pulsing or shader effects, so busy levels run faster. |
 | Click Sounds | A click sound (built-in or your own file) every time you click in a level, plus a custom or muted death sound. |
