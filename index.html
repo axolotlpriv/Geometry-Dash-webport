@@ -6435,9 +6435,9 @@
         return value("global.audiospeed", 1);
       }
       function setAudioSpeed(next) {
-        const audio = window.Module && Module.__gdAudio,
-          current = Module.__gdAudioSpeed || 1;
-        if (next === current || !audio) return;
+        const game = window.Module,
+          audio = game && game.__gdAudio;
+        if (!audio || next === (game.__gdAudioSpeed || 1)) return;
         if (audio.ctx) {
           for (const channel of Object.values(audio.channels)) {
             if (channel.src && channel.when && !channel.paused && !channel.pausedByGroup) {
@@ -6446,7 +6446,7 @@
             }
           }
         }
-        Module.__gdAudioSpeed = next;
+        game.__gdAudioSpeed = next;
         for (const channel of Object.values(audio.channels)) if (channel.src) channel.src.playbackRate.value = channel.pitch * next;
       }
       const audioRate = "*(Module.__gdAudioSpeed||1)";
@@ -22343,8 +22343,12 @@
           },
         });
         // addEventListener(KeybindSettingPressedEventV3(..., "enterSearch"))
-        mod.onKeybind("enterSearch", (down, repeat) => {
+        // 2.2091's LevelSearchLayer::keyDown already searches on a plain
+        // Enter; searching again would open a second list that waits on the
+        // same request forever. Other keys bound here still search.
+        mod.onKeybind("enterSearch", (down, repeat, event) => {
           if (!down || repeat || !searchLayer) return;
+          if (event && /^(Numpad)?Enter$/.test(event.code) && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) return;
           Geode.loader.runOnGameThread((call) => {
             const ui = Geode.cocos(call),
               levelSearch = ui.getChildByID(ui.runningScene(), "LevelSearchLayer");
@@ -22829,7 +22833,10 @@
         };
       function unwrapProxyUrl(input) {
         let current = String(input),
-          parsed;
+          parsed,
+          // The game asked for this URL to be proxied (2.2091 downloads songs
+          // from www.newgrounds.com this way), whatever its host.
+          explicit = false;
         for (let hop = 0; hop < 5; hop++) {
           if (
             /^(?:boomlings\.ale7208|boomlings\.ivan-makarov12341|gd-proxy\.webdashers|webdashers\.webdashersdevelopement|fallbackgdproxy\.webdashers|fallback2\.webdashers)\.workers\.dev\//.test(
@@ -22845,6 +22852,7 @@
           }
           if (parsed.pathname === "/__proxy" && parsed.searchParams.has("url")) {
             current = parsed.searchParams.get("url");
+            explicit = true;
             continue;
           }
           if (
@@ -22913,7 +22921,7 @@
             }
             continue;
           }
-          return HOST_TO_KEY[parsed.hostname] ? parsed : null;
+          return HOST_TO_KEY[parsed.hostname] || (explicit && /^https?:$/.test(parsed.protocol)) ? parsed : null;
         }
         return null;
       }
@@ -22942,10 +22950,12 @@
             );
           }
         }
-        for (const apiBase of FALLBACK_API_ORIGINS) {
-          candidates.push(
-            apiBase + "?" + hostKey + "=" + encodeURIComponent(pathAndQuery),
-          );
+        if (hostKey) {
+          for (const apiBase of FALLBACK_API_ORIGINS) {
+            candidates.push(
+              apiBase + "?" + hostKey + "=" + encodeURIComponent(pathAndQuery),
+            );
+          }
         }
         return candidates;
       }
