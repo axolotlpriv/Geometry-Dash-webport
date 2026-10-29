@@ -6589,6 +6589,20 @@
       ]) {
         mod.hook(name, (call) => call.skip(0), () => E.game.layer && E.safeModeActive() && value("global.safemode.freeze_best_run", true));
       }
+      // Like Eclipse: a completion in safe mode is a test-mode completion,
+      // so the end screen gives no stars, orbs or diamonds and nothing is saved.
+      mod.hook(
+        "PlayLayer::levelComplete",
+        (call) => {
+          const layer = call.arg(0),
+            flag = layer + E.OFF.isTestMode,
+            testMode = mem.u8(flag);
+          mem.setU8(flag, 1);
+          call.callOriginal();
+          mem.setU8(flag, testMode);
+        },
+        () => E.game.layer && E.safeModeActive(),
+      );
       // Jump and attempt statistics ("1" and "2" in GameStatsManager).
       mod.hook(
         "GameStatsManager::incrementStat",
